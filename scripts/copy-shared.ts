@@ -11,9 +11,10 @@ export interface SharedTarget {
 }
 
 /**
- * Shared assets have exactly one source of truth: `shared/`. iOS reads it through symlinks committed
- * under `modules/vescape-core/ios/`, so only Android needs real copies — Gradle cannot follow a symlink
- * out of the module. These copies are generated, gitignored, and refreshed by `copyShared()`.
+ * Shared assets have exactly one source of truth: `shared/`. iOS reads single files through symlinks
+ * committed under `modules/vescape-core/ios/`; everything else needs real copies — Gradle cannot
+ * follow a symlink out of the module, and CocoaPods does not expand a glob through a symlinked
+ * directory. These copies are generated, gitignored, and refreshed by `copyShared()`.
  */
 export function sharedTargets(root = ROOT): SharedTarget[] {
   const androidSrc = join(root, 'modules', 'vescape-core', 'android', 'src')
@@ -49,6 +50,16 @@ export function sharedTargets(root = ROOT): SharedTarget[] {
     {
       src: join(root, 'shared', 'fixtures'),
       dest: join(androidSrc, 'main', 'assets', 'fixtures'),
+      extensions: new Set(['.jsonl']),
+      rename: (file: string) => file,
+    },
+    // iOS needs real copies here too. A symlinked *file* under the pod root (`cell-presets.json`)
+    // is resolved by CocoaPods, but a symlinked *directory* is not: `fixtures/*.jsonl` expanded to
+    // nothing at `pod install`, so `VescapeCoreAssets.bundle` shipped without a single recording
+    // and `startDebugReplay` had no fixture to play on a fresh install.
+    {
+      src: join(root, 'shared', 'fixtures'),
+      dest: join(root, 'modules', 'vescape-core', 'ios', 'fixtures'),
       extensions: new Set(['.jsonl']),
       rename: (file: string) => file,
     },

@@ -48,7 +48,7 @@ interface SocialSheetProps {
 
 export function SocialSheet({ accountWidget, onNavigate }: SocialSheetProps) {
   return (
-    <View style={styles.list}>
+    <View testID="social-sheet" style={styles.list}>
       {accountWidget}
       <RiderNameWidget />
       <GroupRideWidget />

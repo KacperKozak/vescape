@@ -680,7 +680,7 @@ public class VescapeCoreModule: Module {
       do {
         promise.resolve(try TelemetryRepository.shared.importFavoriteMedia(options))
       } catch {
-        promise.reject("ERR_IMPORT_FAVORITE_MEDIA", "favorite media could not be imported", error)
+        promise.reject("ERR_IMPORT_FAVORITE_MEDIA", error.localizedDescription)
       }
     }
 
