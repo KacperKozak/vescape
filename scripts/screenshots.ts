@@ -7,9 +7,9 @@
  * mechanisms and no new native code: a database backup zip restored on startup (history, boards,
  * tunes, alerts) and a Debug Recording replayed at 1x through the real telemetry pipeline.
  *
- *   bun run screenshots               # all 8 panels on the pinned AVD
+ *   bun run screenshots               # all 8 panels; picks the device, or asks when several are up
  *   bun run screenshots --panel 4     # one panel, fast iteration
- *   bun run screenshots --device R5CT # capture on an attached device instead of the AVD
+ *   bun run screenshots --device R5CT # skip the picker and target this serial
  *
  * The hero panel is captured last, on purpose. `TelemetryPipeline.liveSeries` buckets the sparkline
  * over `liveHistoryLimit` minutes of *receipt* timestamps, so a full sparkline needs that much wall
@@ -19,6 +19,8 @@
  */
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
 import { basename, join } from 'path'
+import { createInterface } from 'readline/promises'
+import { stdin as input, stdout as output } from 'process'
 import { applicationId } from '../src/config/appVariant.ts'
 
 const ROOT = join(import.meta.dir, '..')
@@ -160,15 +162,44 @@ async function bootAvd(): Promise<string> {
   process.exit(1)
 }
 
+/** `Pixel 6 (emulator-5554)` — the model makes a serial like `adb-54151FDAS00077-…` readable. */
+async function describeDevice(serial: string): Promise<string> {
+  const model = (
+    await capture(['adb', '-s', serial, 'shell', 'getprop', 'ro.product.model'])
+  ).trim()
+  return model ? `${model} (${serial})` : serial
+}
+
+async function chooseDevice(attached: string[]): Promise<string> {
+  const labels = await Promise.all(attached.map(describeDevice))
+  console.log('Select capture device:')
+  labels.forEach((label, index) => {
+    console.log(`${index + 1}. ${label}`)
+  })
+  console.log(`${attached.length + 1}. boot ${AVD_NAME} (pinned 1080x2400 AVD)`)
+
+  const rl = createInterface({ input, output })
+  try {
+    const answer = (await rl.question('Device: ')).trim()
+    const selected = Number.parseInt(answer, 10)
+    if (selected === attached.length + 1) return bootAvd()
+    if (Number.isFinite(selected) && selected >= 1 && selected <= attached.length) {
+      return attached[selected - 1]
+    }
+    if (attached.includes(answer)) return answer
+    console.error(`Unknown device: ${answer}`)
+    process.exit(1)
+  } finally {
+    rl.close()
+  }
+}
+
 async function resolveDevice(args: Args): Promise<string> {
   if (args.device) return args.device
   const attached = await attachedDevices()
+  if (attached.length === 0) return bootAvd()
   if (attached.length === 1) return attached[0]
-  if (attached.length > 1) {
-    console.error(`Multiple devices attached: ${attached.join(', ')}. Pass --device <serial>.`)
-    process.exit(1)
-  }
-  return bootAvd()
+  return chooseDevice(attached)
 }
 
 // ── device prep ──────────────────────────────────────────────────────────────
