@@ -11,6 +11,7 @@ import { basename, join } from 'path'
 import { applicationId } from '../../src/config/appVariant.ts'
 import {
   capture,
+  CAPTURE_LOCATION,
   FIXTURE_ZIP,
   runOrDie,
   screenshotBuildEnv,
@@ -235,6 +236,17 @@ export async function createAndroidDriver(
       for (const permission of ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION']) {
         await adb('shell', 'pm', 'grant', applicationId, `android.permission.${permission}`)
       }
+    },
+
+    async pinLocation() {
+      // `geo fix` is an emulator console command; a physical device would need a mock provider app,
+      // which is well past what a screenshot run should install.
+      if (!device.serial.startsWith('emulator-')) {
+        console.warn('  physical device: location left as-is, the map backdrop will not match iOS')
+        return
+      }
+      const { latitude, longitude } = CAPTURE_LOCATION
+      await adb('emu', 'geo', 'fix', String(longitude), String(latitude))
     },
 
     async setChrome(clean: boolean) {
