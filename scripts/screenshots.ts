@@ -7,7 +7,7 @@
  * existing mechanisms and no new native code: a database backup zip restored on startup (history,
  * boards, tunes, alerts) and a Debug Recording replayed at 1x through the real telemetry pipeline.
  *
- *   bun run screenshots                        # both platforms, all 8 panels
+ *   bun run screenshots                        # asks for platform, then device
  *   bun run screenshots --platform ios         # iOS only, on a Release simulator build
  *   bun run screenshots --panel 4 --no-build   # one panel against the installed build
  *   bun run screenshots --device R5CT          # skip the picker and target this serial/udid
@@ -29,7 +29,7 @@ import { applicationId } from '../src/config/appVariant.ts'
 import { createAndroidDriver } from './lib/androidCapture.ts'
 import { ROOT, runOrDie, type CaptureDriver, type CapturePlatform } from './lib/captureDriver.ts'
 import { createIosDriver } from './lib/iosCapture.ts'
-import { SelectCancelled } from './lib/select.ts'
+import { select, SelectCancelled } from './lib/select.ts'
 
 const FLOWS_DIR = join(ROOT, 'e2e', 'flows', 'screenshots')
 
@@ -40,7 +40,8 @@ const DEFAULT_REPLAY = 'replay-thor301.jsonl'
 const DEFAULT_SPARKLINE_MINUTES = 5
 
 interface Args {
-  platforms: CapturePlatform[]
+  /** `null` until the picker runs — `--platform` skips it. */
+  platforms: CapturePlatform[] | null
   panel: number | null
   device: string | null
   replay: string
@@ -57,7 +58,7 @@ function parsePlatform(value: string): CapturePlatform[] {
 
 function parseArgs(argv: string[]): Args {
   const args: Args = {
-    platforms: PLATFORMS,
+    platforms: null,
     panel: null,
     device: null,
     replay: DEFAULT_REPLAY,
@@ -85,9 +86,25 @@ function parseArgs(argv: string[]): Args {
   if (args.panel != null && !Number.isInteger(args.panel))
     throw new Error('--panel must be an integer')
   // `--device` names one device, so it cannot address two platforms at once.
-  if (args.device && args.platforms.length > 1)
-    throw new Error('--device needs an explicit --platform')
+  if (args.device) {
+    if (args.platforms == null) throw new Error('--device needs an explicit --platform')
+    if (args.platforms.length > 1) throw new Error('--device needs a single --platform')
+  }
   return args
+}
+
+/**
+ * Platform first, device second — the two runs are sequential and a whole Android pass (build, 8
+ * panels, the sparkline wait) sits in front of the iOS one, so "both" has to be a deliberate choice
+ * rather than what you get for pressing Enter on a device list.
+ */
+async function resolvePlatforms(args: Args): Promise<CapturePlatform[]> {
+  if (args.platforms) return args.platforms
+  return select('Capture platform', [
+    { label: 'Android', value: ['android'] as CapturePlatform[], hint: 'Play, 1080x2400' },
+    { label: 'iOS', value: ['ios'] as CapturePlatform[], hint: 'App Store, 1320x2868' },
+    { label: 'Both', value: PLATFORMS, hint: 'Android first, then iOS' },
+  ])
 }
 
 // ── capture ──────────────────────────────────────────────────────────────────
@@ -188,9 +205,10 @@ async function capturePlatform(platform: CapturePlatform, args: Args): Promise<v
 }
 
 async function main(args: Args): Promise<void> {
+  const platforms = await resolvePlatforms(args)
   // Sequentially: both runs drive Maestro and a 1x replay, and the sparkline wait is wall clock, so
   // there is nothing to gain from interleaving them and a lot of device contention to lose.
-  for (const platform of args.platforms) await capturePlatform(platform, args)
+  for (const platform of platforms) await capturePlatform(platform, args)
 }
 
 let args: Args

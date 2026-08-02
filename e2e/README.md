@@ -87,9 +87,13 @@ Future board-session flows should use an E2E native simulation mode instead of m
 `scripts/screenshots.ts`:
 
 ```sh
-bun run screenshots                 # both platforms
-bun run screenshots --platform ios  # one platform
+bun run screenshots                 # asks for platform, then device
+bun run screenshots --platform ios  # skip the platform picker
 ```
+
+The bare command asks for the platform first (Android / iOS / Both), then the device. "Both" is a
+deliberate choice rather than the default: the runs are sequential, so a whole Android pass — build,
+eight panels, the sparkline wait — happens before iOS starts.
 
 One flow set drives both platforms. The runner passes `OUT_DIR` to Maestro
 (`screenshots/android` or `screenshots/ios`), so the panel list, order and filenames are identical
@@ -140,8 +144,8 @@ Iterate on one panel:
 bun run screenshots --panel 4
 ```
 
-The runner shows an arrow-key picker (↑/↓ or j/k, Enter, Esc to cancel): attached devices and
-existing AVDs with their resolutions on Android, available simulators on iOS. It warns when the
+The device picker is the same arrow-key list as the platform one (↑/↓ or j/k, Enter, Esc to cancel):
+attached devices and existing AVDs with their resolutions on Android, available simulators on iOS. It warns when the
 chosen device is not the store size (1080x2400 for Play, iPhone 17 Pro Max for App Store Connect).
 `--device <serial|udid|name>` skips the picker and needs an explicit `--platform`.
 
