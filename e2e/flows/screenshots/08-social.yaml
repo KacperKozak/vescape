@@ -1,0 +1,10 @@
+# Group ride data comes from the live relay; a rerun may be needed to catch a populated drawer.
+appId: ${APP_ID}
+---
+- tapOn:
+    id: social-drawer-trigger
+- extendedWaitUntil:
+    visible: 'Social'
+    timeout: 15000
+- takeScreenshot: ${OUT_DIR}/08-social
+- runFlow: _home.yaml

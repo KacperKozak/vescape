@@ -87,8 +87,24 @@ Future board-session flows should use an E2E native simulation mode instead of m
 `scripts/screenshots.ts`:
 
 ```sh
-bun run screenshots
+bun run screenshots                 # both platforms
+bun run screenshots --platform ios  # one platform
 ```
+
+One flow set drives both platforms. The runner passes `OUT_DIR` to Maestro
+(`screenshots/android` or `screenshots/ios`), so the panel list, order and filenames are identical
+and the two sets can be compared side by side. The flows never use `back`: they dismiss through the
+same on-screen controls a rider taps (`weather-exit`, `legal-limits-exit`, `history-back`,
+`header-back`, `map-exit`, drawer backdrops), because Android's hardware back has no iOS equivalent
+for overlay view states. Anything genuinely platform-specific lives in `scripts/lib/androidCapture.ts`
+and `scripts/lib/iosCapture.ts` behind the `CaptureDriver` contract, not in a second flow set.
+
+iOS captures on an **iPhone 17 Pro Max simulator** (1320x2868, the 6.9" size App Store Connect
+requires; Apple downscales to the rest). A physical device is not an option — `simctl status_bar`,
+which pins the clock, battery and signal for the whole run, has no device equivalent. The fixture
+zip is copied straight into the simulator container
+(`xcrun simctl get_app_container <udid> <bundle> data` → `Documents/`); Android pushes it to the
+app's external files dir with `adb`.
 
 A screenshot build is a **Release** build with `EXPO_PUBLIC_SCREENSHOTS=1` and `EXPO_PUBLIC_E2E`
 **unset**. That distinction is load-bearing: `EXPO_PUBLIC_E2E=1` reroutes `getBoards`,
@@ -100,16 +116,17 @@ render-rate warning).
 Data comes from two existing mechanisms, no new native code:
 
 - durable (history, boards, tunes, alerts): a backup zip at `shared/fixtures/screenshot-db.zip`,
-  pushed to the app's external files dir and restored by `restoreDatabase` on startup.
+  staged into the app's fixture dir (`src/config/screenshotMode.ts`) and restored by
+  `restoreDatabase` on startup — Room on Android, GRDB on iOS, already `@parity` peers.
 - live (home hero panel): `startDebugReplay` at 1x through the real telemetry pipeline.
 
 Both `screenshots/` and the fixture zip are gitignored. Without the zip the run still works, with
 empty history.
 
 Fixture names travel as build-time env (`EXPO_PUBLIC_SCREENSHOTS_REPLAY`, `EXPO_PUBLIC_SCREENSHOTS_DB`)
-rather than a manifest file the app reads. `expo-file-system` sandboxes paths outside the app's
-document and cache directories, so it cannot read the external files dir the runner pushes into —
-only native `restoreDatabase` can, via a `ContentResolver` open.
+rather than a manifest file the app reads. On Android `expo-file-system` sandboxes paths outside the
+app's document and cache directories, so it cannot read the external files dir the runner pushes
+into — only native `restoreDatabase` can, via a `ContentResolver` open.
 
 Iterate on one panel:
 
@@ -117,16 +134,18 @@ Iterate on one panel:
 bun run screenshots --panel 4
 ```
 
-The runner shows an arrow-key picker (↑/↓ or j/k, Enter, Esc to cancel) listing attached devices
-and existing AVDs with their resolutions; it warns when the chosen one is not 1080x2400, the size
-Play cuts phone screenshots to. `--device <serial>` skips the picker.
+The runner shows an arrow-key picker (↑/↓ or j/k, Enter, Esc to cancel): attached devices and
+existing AVDs with their resolutions on Android, available simulators on iOS. It warns when the
+chosen device is not the store size (1080x2400 for Play, iPhone 17 Pro Max for App Store Connect).
+`--device <serial|udid|name>` skips the picker and needs an explicit `--platform`.
 
 It builds the screenshot build every run by default, because the installed package id alone cannot
 distinguish one from an ordinary dev install and capturing against the wrong build produces a run
 that goes nowhere. Pass `--no-build` to reuse what is installed once you have a screenshot build on
 the device.
 
-Other flags: `--replay <name>` (default `replay-thor301`), `--no-wait` (skip the sparkline wait).
+Other flags: `--replay <name>` (default `replay-thor301`), `--no-wait` (skip the sparkline wait),
+`--platform android|ios|both` (default `both`).
 
 The hero panel is captured last. `TelemetryPipeline.liveSeries` buckets the sparkline over
 `liveHistoryLimit` minutes of receipt timestamps, so a full sparkline needs that much wall clock at

@@ -1,0 +1,10 @@
+appId: ${APP_ID}
+---
+- tapOn:
+    id: history-button
+- extendedWaitUntil:
+    visible:
+      id: history-session-sheet
+    timeout: 30000
+- takeScreenshot: ${OUT_DIR}/06-history
+- runFlow: _home.yaml

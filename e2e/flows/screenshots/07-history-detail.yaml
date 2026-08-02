@@ -1,0 +1,24 @@
+# Ride detail with the optional charts on: duty cycle plus both temperature traces.
+appId: ${APP_ID}
+---
+- tapOn:
+    id: history-button
+- extendedWaitUntil:
+    visible:
+      id: history-session-sheet
+    timeout: 30000
+- tapOn:
+    id: 'history-session-row-.*'
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: history-metric-tab-duty
+    timeout: 30000
+- tapOn:
+    id: history-metric-tab-duty
+- tapOn:
+    id: history-metric-tab-tempMotor
+- tapOn:
+    id: history-metric-tab-tempController
+- takeScreenshot: ${OUT_DIR}/07-history-detail
+- runFlow: _home.yaml
