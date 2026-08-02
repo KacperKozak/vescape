@@ -1,3 +1,6 @@
+import { Paths } from 'expo-file-system'
+import { Platform } from 'react-native'
+
 import { applicationId } from '@/config/appVariant'
 
 /**
@@ -17,17 +20,25 @@ export const screenshotReplayName = process.env.EXPO_PUBLIC_SCREENSHOTS_REPLAY ?
 export const screenshotDatabaseFile = process.env.EXPO_PUBLIC_SCREENSHOTS_DB ?? ''
 
 /**
- * Where the runner stages the backup zip: the app's own external files dir, which `adb push` can
- * write to.
+ * Where the runner stages the backup zip, per platform: the app's own external files dir on
+ * Android (what `adb push` can write to) and the app's Documents dir on iOS (what the runner can
+ * copy into via `simctl get_app_container`). Both are read by native `restoreDatabase` — a
+ * `ContentResolver` open on Android, a `Data(contentsOf:)` on iOS.
  *
- * Read exclusively by native `restoreDatabase` (a `ContentResolver` open). `expo-file-system`
- * cannot be used here — it sandboxes paths outside the app's document and cache directories, so
- * `Directory.create` is rejected and `File.exists` reads as false no matter what is on disk. That is
- * also why the capture run carries its fixture names as build-time env vars rather than a manifest
- * file the app would have to read.
+ * On Android `expo-file-system` cannot be used here: it sandboxes paths outside the app's document
+ * and cache directories, so `Directory.create` is rejected and `File.exists` reads as false no
+ * matter what is on disk. That is also why the capture run carries its fixture names as build-time
+ * env vars rather than a manifest file the app would have to read.
+ *
+ * @parity /scripts/lib/androidCapture.ts
+ * @parity /scripts/lib/iosCapture.ts
  */
-export const screenshotFixtureDir = `/storage/emulated/0/Android/data/${applicationId}/files`
+export const screenshotFixtureDir =
+  Platform.OS === 'ios'
+    ? Paths.document.uri.replace(/\/$/, '')
+    : `/storage/emulated/0/Android/data/${applicationId}/files`
 
 export function screenshotFixtureUri(name: string): string {
-  return `file://${screenshotFixtureDir}/${name}`
+  const base = screenshotFixtureDir
+  return base.startsWith('file://') ? `${base}/${name}` : `file://${base}/${name}`
 }

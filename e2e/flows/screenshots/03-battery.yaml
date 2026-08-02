@@ -1,0 +1,9 @@
+appId: ${APP_ID}
+---
+- tapOn:
+    id: battery-bar
+- extendedWaitUntil:
+    visible: 'Battery'
+    timeout: 15000
+- takeScreenshot: ${OUT_DIR}/03-battery
+- runFlow: _home.yaml

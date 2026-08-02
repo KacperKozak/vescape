@@ -206,6 +206,7 @@ export function TopBar({
         triggerRef={socialRef}
         title="Social"
         icon={UsersThreeIcon}
+        backdropTestID="social-drawer-backdrop"
         onClose={() => setSocialOpen(false)}
       >
         <SocialSheet
