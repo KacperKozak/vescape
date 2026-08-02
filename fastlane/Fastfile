@@ -393,7 +393,8 @@ platform :ios do
     upload_to_testflight(
       api_key:                              api_key,
       skip_waiting_for_build_processing:    true,
-      distribute_external:                  false
+      distribute_external:                  false,
+      groups:                               ["Testers"]
     )
 
     # Step 2: Create an App Store draft at the same version so you can review
