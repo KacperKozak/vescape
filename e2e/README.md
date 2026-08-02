@@ -112,9 +112,11 @@ Iterate on one panel:
 bun run screenshots --panel 4
 ```
 
-Useful flags: `--device <serial>` (capture on an attached device instead of the pinned
-`Vescape_Screenshots` AVD), `--build` (force a rebuild), `--replay <name>` (default
-`replay-thor301`), `--no-wait` (skip the sparkline wait).
+With nothing attached the runner boots the pinned `Vescape_Screenshots` AVD; with several devices
+up it asks which to use. `--device <serial>` skips the picker.
+
+Other flags: `--build` (force a rebuild), `--replay <name>` (default `replay-thor301`),
+`--no-wait` (skip the sparkline wait).
 
 The hero panel is captured last. `TelemetryPipeline.liveSeries` buckets the sparkline over
 `liveHistoryLimit` minutes of receipt timestamps, so a full sparkline needs that much wall clock at
