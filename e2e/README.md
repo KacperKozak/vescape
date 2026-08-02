@@ -106,6 +106,11 @@ Data comes from two existing mechanisms, no new native code:
 Both `screenshots/` and the fixture zip are gitignored. Without the zip the run still works, with
 empty history.
 
+Fixture names travel as build-time env (`EXPO_PUBLIC_SCREENSHOTS_REPLAY`, `EXPO_PUBLIC_SCREENSHOTS_DB`)
+rather than a manifest file the app reads. `expo-file-system` sandboxes paths outside the app's
+document and cache directories, so it cannot read the external files dir the runner pushes into —
+only native `restoreDatabase` can, via a `ContentResolver` open.
+
 Iterate on one panel:
 
 ```sh

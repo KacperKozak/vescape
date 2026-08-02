@@ -29,12 +29,12 @@ const OUT_DIR = join(ROOT, 'screenshots', 'android')
 const FIXTURE_ZIP = join(ROOT, 'shared', 'fixtures', 'screenshot-db.zip')
 
 /** Mirrors `screenshotFixtureDir` in `src/config/screenshotMode.ts`. */
-const DEVICE_FIXTURE_DIR = `/storage/emulated/0/Android/data/${applicationId}/files/screenshots`
+const DEVICE_FIXTURE_DIR = `/storage/emulated/0/Android/data/${applicationId}/files`
 
 /** Play's phone screenshots are cut to this; anything else has to be rescaled by hand. */
 const TARGET_RESOLUTION = '1080x2400'
 
-const DEFAULT_REPLAY = 'replay-thor301'
+const DEFAULT_REPLAY = 'replay-thor301.jsonl'
 /** `AppSettings.liveHistoryLimit` default — the sparkline window the hero panel has to fill. */
 const DEFAULT_SPARKLINE_MINUTES = 5
 
@@ -113,13 +113,48 @@ function emulatorBin(): string {
   return fromSdk && existsSync(fromSdk) ? fromSdk : 'emulator'
 }
 
-async function attachedDevices(): Promise<string[]> {
+/**
+ * A device the runner can drive.
+ *
+ * `serial` addresses it over adb; `name` is what `expo run:android --device` matches on, and the two
+ * are not interchangeable — Expo names an emulator by its AVD (`Medium_Phone`, not `emulator-5554`)
+ * and a physical device by its `model:` field.
+ */
+interface Device {
+  serial: string
+  name: string
+}
+
+async function attachedSerials(): Promise<string[]> {
   const out = await capture(['adb', 'devices'])
   return out
     .split('\n')
     .slice(1)
     .filter((line) => line.includes('\tdevice'))
     .map((line) => line.split('\t')[0].trim())
+}
+
+/** The AVD behind a running emulator serial, which is also the name Expo knows it by. */
+async function runningAvdName(serial: string): Promise<string | null> {
+  if (!serial.startsWith('emulator-')) return null
+  const out = await capture(['adb', '-s', serial, 'emu', 'avd', 'name'])
+  return out.split('\n')[0].trim() || null
+}
+
+async function attachedDevices(): Promise<Device[]> {
+  const out = await capture(['adb', 'devices', '-l'])
+  const lines = out
+    .split('\n')
+    .slice(1)
+    .filter((line) => line.includes(' device ') || line.includes('\tdevice'))
+
+  return Promise.all(
+    lines.map(async (line) => {
+      const serial = line.split(/\s+/)[0].trim()
+      const name = (await runningAvdName(serial)) ?? /model:(\S+)/.exec(line)?.[1] ?? serial
+      return { serial, name }
+    }),
+  )
 }
 
 async function listAvds(): Promise<string[]> {
@@ -140,9 +175,9 @@ function avdResolution(name: string): string | null {
   return width && height ? `${width}x${height}` : null
 }
 
-/** Boots an existing AVD and returns its serial. */
-async function bootAvd(name: string): Promise<string> {
-  const before = await attachedDevices()
+/** Boots an existing AVD and returns it once adb reports it ready. */
+async function bootAvd(name: string): Promise<Device> {
+  const before = await attachedSerials()
   console.log(`› Booting ${name}…`)
   Bun.spawn([emulatorBin(), '-avd', name, '-no-boot-anim', '-no-snapshot'], {
     stdout: 'ignore',
@@ -151,12 +186,12 @@ async function bootAvd(name: string): Promise<string> {
 
   const deadline = Date.now() + 180_000
   while (Date.now() < deadline) {
-    const serial = (await attachedDevices()).find((id) => !before.includes(id))
+    const serial = (await attachedSerials()).find((id) => !before.includes(id))
     if (serial) {
       const booted = (
         await capture(['adb', '-s', serial, 'shell', 'getprop', 'sys.boot_completed'])
       ).trim()
-      if (booted === '1') return serial
+      if (booted === '1') return { serial, name }
     }
     await Bun.sleep(2000)
   }
@@ -164,53 +199,55 @@ async function bootAvd(name: string): Promise<string> {
   process.exit(1)
 }
 
-/** A serial like `adb-54151FDAS00077-x5XeY4._adb-tls-connect._tcp` is unreadable on its own. */
-async function deviceModel(serial: string): Promise<string | null> {
-  const model = (
-    await capture(['adb', '-s', serial, 'shell', 'getprop', 'ro.product.model'])
-  ).trim()
-  return model || null
-}
-
 /** `adb-54151FDAS00077-x5XeY4._adb-tls-connect._tcp` → `54151FDAS00077`. */
 function shortSerial(serial: string): string {
   return serial.replace(/^adb-/, '').replace(/-\w+\._adb-tls-connect\._tcp$/, '')
 }
 
-type DeviceChoice = { kind: 'serial'; serial: string } | { kind: 'avd'; name: string }
+type DeviceChoice = { kind: 'attached'; device: Device } | { kind: 'avd'; name: string }
 
-async function chooseDevice(attached: string[]): Promise<DeviceChoice> {
-  const models = await Promise.all(attached.map(deviceModel))
-  const options: SelectOption<DeviceChoice>[] = attached.map((serial, index) => ({
-    label: models[index] ?? serial,
-    value: { kind: 'serial', serial },
-    hint: shortSerial(serial),
+async function chooseDevice(attached: Device[]): Promise<DeviceChoice> {
+  const options: SelectOption<DeviceChoice>[] = attached.map((device) => ({
+    label: device.name,
+    value: { kind: 'attached', device },
+    hint: shortSerial(device.serial),
   }))
 
+  // An AVD that is already up is listed once, as the running device — offering to "boot" it again
+  // would be the same device under a second name.
+  const running = new Set(attached.map((device) => device.name))
   for (const name of await listAvds()) {
-    const resolution = avdResolution(name)
+    if (running.has(name)) continue
     options.push({
       label: `boot ${name}`,
       value: { kind: 'avd', name },
-      hint: resolution ?? 'AVD',
+      hint: avdResolution(name) ?? 'AVD',
     })
   }
 
+  if (options.length === 0) {
+    console.error('No device attached and no AVD available.')
+    process.exit(1)
+  }
   if (options.length === 1) return options[0].value
   return select('Capture device', options)
 }
 
-async function resolveDevice(args: Args): Promise<string> {
-  if (args.device) return args.device
-
+async function resolveDevice(args: Args): Promise<Device> {
   const attached = await attachedDevices()
-  const choice =
-    attached.length === 1
-      ? ({ kind: 'serial', serial: attached[0] } as const)
-      : await chooseDevice(attached)
 
-  const device = choice.kind === 'avd' ? await bootAvd(choice.name) : choice.serial
-  await warnOnResolution(device)
+  if (args.device) {
+    const match = attached.find((d) => d.serial === args.device || d.name === args.device)
+    if (!match) {
+      console.error(`No attached device matches "${args.device}".`)
+      process.exit(1)
+    }
+    return match
+  }
+
+  const choice = await chooseDevice(attached)
+  const device = choice.kind === 'avd' ? await bootAvd(choice.name) : choice.device
+  await warnOnResolution(device.serial)
   return device
 }
 
@@ -229,40 +266,41 @@ async function installed(device: string): Promise<boolean> {
   return out.includes(`package:${applicationId}`)
 }
 
-async function buildAndInstall(device: string): Promise<void> {
+async function buildAndInstall(device: Device, replay: string): Promise<void> {
   console.log('› Building the screenshot Release build…')
   await runOrDie(['bun', 'run', 'native:sync', 'android'])
   // EXPO_PUBLIC_E2E must stay unset: it reroutes board and telemetry reads to `e2eFake`, which
   // would leave the native replay session invisible to the UI.
+  // Fixture names are baked into the build rather than read from a file at runtime: the app cannot
+  // read a manifest out of its external files dir (see `src/config/screenshotMode.ts`).
   const env: Record<string, string | undefined> = {
     ...process.env,
     EXPO_PUBLIC_SCREENSHOTS: '1',
+    EXPO_PUBLIC_SCREENSHOTS_REPLAY: replay,
+    EXPO_PUBLIC_SCREENSHOTS_DB: existsSync(FIXTURE_ZIP) ? basename(FIXTURE_ZIP) : '',
   }
   delete env.EXPO_PUBLIC_E2E
-  await runOrDie(['bunx', 'expo', 'run:android', '--variant', 'release', '--device', device], env)
+  // `--device` takes Expo's device name, not the adb serial.
+  await runOrDie(
+    ['bunx', 'expo', 'run:android', '--variant', 'release', '--device', device.name],
+    env,
+  )
 }
 
-async function pushFixtures(device: string, replay: string): Promise<void> {
+async function pushFixtures(device: string): Promise<void> {
   const adb = (...rest: string[]) => capture(['adb', '-s', device, ...rest])
 
-  console.log('› Staging fixtures…')
+  console.log('\u203a Staging fixtures\u2026')
   // `pm clear` wipes the external files dir too, so it has to come before the push.
   await adb('shell', 'pm', 'clear', applicationId)
-  await adb('shell', 'mkdir', '-p', DEVICE_FIXTURE_DIR)
 
-  const manifest: { database?: string; replay?: string } = { replay }
   if (existsSync(FIXTURE_ZIP)) {
-    manifest.database = basename(FIXTURE_ZIP)
-    await adb('push', FIXTURE_ZIP, `${DEVICE_FIXTURE_DIR}/${manifest.database}`)
+    await adb('push', FIXTURE_ZIP, `${DEVICE_FIXTURE_DIR}/${basename(FIXTURE_ZIP)}`)
   } else {
     console.warn(
-      `  no ${FIXTURE_ZIP} — capturing with replay telemetry only, history will be empty`,
+      `  no ${FIXTURE_ZIP} \u2014 capturing with replay telemetry only, history will be empty`,
     )
   }
-
-  const manifestFile = join(OUT_DIR, '.manifest.json')
-  writeFileSync(manifestFile, JSON.stringify(manifest))
-  await adb('push', manifestFile, `${DEVICE_FIXTURE_DIR}/manifest.json`)
 
   for (const permission of ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION']) {
     await adb('shell', 'pm', 'grant', applicationId, `android.permission.${permission}`)
@@ -351,22 +389,22 @@ async function main(args: Args): Promise<void> {
   mkdirSync(OUT_DIR, { recursive: true })
 
   const device = await resolveDevice(args)
-  console.log(`Device: ${device}`)
+  console.log(`Device: ${device.name} (${device.serial})`)
 
   // Build by default: `installed()` only sees the package id, so it cannot tell a screenshot build
   // from an ordinary dev install, and reusing the wrong one produces a run that goes nowhere.
   if (args.noBuild) {
-    if (!(await installed(device))) {
-      console.error(`${applicationId} is not installed on ${device}; drop --no-build.`)
+    if (!(await installed(device.serial))) {
+      console.error(`${applicationId} is not installed on ${device.name}; drop --no-build.`)
       process.exit(1)
     }
     console.log('› Reusing the installed build (--no-build) — it must be a screenshot build.')
   } else {
-    await buildAndInstall(device)
+    await buildAndInstall(device, args.replay)
   }
 
-  await pushFixtures(device, args.replay)
-  await setChrome(device, true)
+  await pushFixtures(device.serial)
+  await setChrome(device.serial, true)
 
   try {
     const selected = selectPanels(args)
@@ -376,8 +414,8 @@ async function main(args: Args): Promise<void> {
     const rest = selected.filter((file) => !file.startsWith('01-'))
 
     const bootedAt = Date.now()
-    await runFlow('_boot.yaml', device)
-    for (const file of rest) await runFlow(file, device)
+    await runFlow('_boot.yaml', device.serial)
+    for (const file of rest) await runFlow(file, device.serial)
 
     if (hero.length > 0 && !args.noWait) {
       const remainingMs = args.sparklineMinutes * 60_000 - (Date.now() - bootedAt)
@@ -386,9 +424,9 @@ async function main(args: Args): Promise<void> {
         await Bun.sleep(remainingMs)
       }
     }
-    for (const file of hero) await runFlow(file, device)
+    for (const file of hero) await runFlow(file, device.serial)
   } finally {
-    await setChrome(device, false)
+    await setChrome(device.serial, false)
   }
 
   console.log(`\nScreenshots → ${OUT_DIR}`)
