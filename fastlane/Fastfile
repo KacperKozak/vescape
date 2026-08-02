@@ -357,8 +357,19 @@ platform :ios do
 
   desc "Build a signed IPA, ship to TestFlight testers, and stage an App Store draft"
   lane :release do
-    # Create a temporary keychain so match can import the distribution cert in CI.
-    setup_ci
+    # Create an unlocked keychain with a known password so match can import
+    # the distribution cert. setup_ci alone doesn't pass the password to match,
+    # causing SecItemCopyMatching failures on GitHub Actions runners.
+    keychain_name     = "vescape-build"
+    keychain_password = SecureRandom.hex(32)
+    create_keychain(
+      name:             keychain_name,
+      password:         keychain_password,
+      default_keychain: true,
+      unlock:           true,
+      timeout:          3600,
+      lock_when_sleeps: false
+    )
 
     # Authenticate with App Store Connect via API key (no Apple ID password needed).
     # The .p8 file is decoded to RUNNER_TEMP by the workflow and its path exported as
@@ -373,9 +384,11 @@ platform :ios do
     # Pull the distribution certificate + provisioning profiles from the private
     # certs repo. The workflow sets CI=true so match runs in read-only mode.
     match(
-      type:       "appstore",
-      api_key:    api_key,
-      readonly:   ENV["CI"] == "true"
+      type:              "appstore",
+      api_key:           api_key,
+      readonly:          ENV["CI"] == "true",
+      keychain_name:     keychain_name,
+      keychain_password: keychain_password
     )
 
     # Build a signed IPA from the expo-prebuilt workspace.
