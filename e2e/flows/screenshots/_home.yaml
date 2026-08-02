@@ -28,8 +28,9 @@ appId: ${APP_ID}
       visible:
         id: history-session-sheet-backdrop
     commands:
+      # Same as the social drawer below: tap the exposed backdrop area, not the element centre.
       - tapOn:
-          id: history-session-sheet-backdrop
+          point: 50%, 90%
 - runFlow:
     when:
       visible:
@@ -42,8 +43,11 @@ appId: ${APP_ID}
       visible:
         id: social-drawer-backdrop
     commands:
+      # A point, not the element: the backdrop is a full-screen `Pressable` *behind* the drawer, so
+      # tapping its centre lands on the drawer content and the drawer stays open. The lower screen
+      # is backdrop everywhere the drawer does not reach.
       - tapOn:
-          id: social-drawer-backdrop
+          point: 50%, 90%
 - runFlow:
     when:
       visible:
