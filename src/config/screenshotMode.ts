@@ -10,19 +10,24 @@ import { applicationId } from '@/config/appVariant'
  */
 export const screenshotModeEnabled = process.env.EXPO_PUBLIC_SCREENSHOTS === '1'
 
+/** Debug Recording replayed at 1x through the real telemetry pipeline. */
+export const screenshotReplayName = process.env.EXPO_PUBLIC_SCREENSHOTS_REPLAY ?? ''
+
+/** Backup zip filename the runner pushed into `screenshotFixtureDir`; empty skips the restore. */
+export const screenshotDatabaseFile = process.env.EXPO_PUBLIC_SCREENSHOTS_DB ?? ''
+
 /**
- * Where the runner stages fixtures. The app's external files dir is writable by `adb push` and
- * readable by the app without any runtime permission, so it works on a non-debuggable Release build.
+ * Where the runner stages the backup zip: the app's own external files dir, which `adb push` can
+ * write to.
+ *
+ * Read exclusively by native `restoreDatabase` (a `ContentResolver` open). `expo-file-system`
+ * cannot be used here — it sandboxes paths outside the app's document and cache directories, so
+ * `Directory.create` is rejected and `File.exists` reads as false no matter what is on disk. That is
+ * also why the capture run carries its fixture names as build-time env vars rather than a manifest
+ * file the app would have to read.
  */
-export const screenshotFixtureDir = `/storage/emulated/0/Android/data/${applicationId}/files/screenshots`
+export const screenshotFixtureDir = `/storage/emulated/0/Android/data/${applicationId}/files`
 
-/** Manifest the runner writes next to the fixtures; see `startScreenshotFixtures`. */
-export const screenshotManifestPath = `${screenshotFixtureDir}/manifest.json`
-
-/** Runner-written fixture manifest. Both fields are optional — either half can be skipped. */
-export interface ScreenshotManifest {
-  /** Backup zip filename inside `screenshotFixtureDir`, restored via `restoreDatabase`. */
-  database?: string
-  /** Debug Recording name replayed at 1x through the real telemetry pipeline. */
-  replay?: string
+export function screenshotFixtureUri(name: string): string {
+  return `file://${screenshotFixtureDir}/${name}`
 }

@@ -1,29 +1,22 @@
 import { useEffect, useState } from 'react'
-import { File } from 'expo-file-system'
 import { restoreDatabase, startDebugReplay, updateSetting } from 'vescape-core'
 
 import {
-  screenshotFixtureDir,
-  screenshotManifestPath,
+  screenshotDatabaseFile,
+  screenshotFixtureUri,
   screenshotModeEnabled,
-  type ScreenshotManifest,
+  screenshotReplayName,
 } from '@/config/screenshotMode'
 
-async function readManifest(): Promise<ScreenshotManifest | null> {
-  const file = new File(screenshotManifestPath)
-  if (!file.exists) return null
-  return JSON.parse(await file.text()) as ScreenshotManifest
-}
-
-async function applyFixtures(manifest: ScreenshotManifest): Promise<void> {
-  if (manifest.database) {
-    await restoreDatabase(`file://${screenshotFixtureDir}/${manifest.database}`)
+async function applyFixtures(): Promise<void> {
+  if (screenshotDatabaseFile) {
+    await restoreDatabase(screenshotFixtureUri(screenshotDatabaseFile))
     // The restore swaps the database under the app; settings live there too, so this must come
     // after it. A replay session is a real session to `RecordingCoordinator` — auto-recording would
     // write a synthetic ride into the fixture history we are about to photograph.
     await updateSetting('autoRecording', false)
   }
-  if (manifest.replay) await startDebugReplay(manifest.replay)
+  if (screenshotReplayName) await startDebugReplay(screenshotReplayName)
 }
 
 /**
@@ -42,9 +35,7 @@ export function useScreenshotFixtures(): boolean {
     let cancelled = false
     void (async () => {
       try {
-        const manifest = await readManifest()
-        if (manifest) await applyFixtures(manifest)
-        else console.warn(`[screenshots] no manifest at ${screenshotManifestPath}`)
+        await applyFixtures()
       } catch (error) {
         // A broken fixture must not brick the run — boot anyway so the failure is visible on screen.
         console.warn('[screenshots] fixture setup failed', error)

@@ -153,10 +153,6 @@ export function TopBar({
   const now = new Date()
   const isNight = isNightAtTime(now.getHours(), now.getMinutes(), sunrise, sunset)
 
-  // A capture run always has a board in its fixture; if it somehow does not, drop the pill rather
-  // than photograph "No board" chrome.
-  const showBoardPill = !screenshotModeEnabled || activeBoard != null
-
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
       <View style={styles.row}>
@@ -170,17 +166,15 @@ export function TopBar({
             accent={rideActive ? theme.palette.groupRide.color : undefined}
           />
         </View>
-        {showBoardPill && (
-          <BoardPill
-            ref={pillRef}
-            activeBoardId={activeBoardId}
-            activeBoard={activeBoard}
-            bleStatus={bleStatus}
-            isReplay={isReplay}
-            onOpenSelector={() => setSelectorOpen(true)}
-            onDisconnect={onDisconnect}
-          />
-        )}
+        <BoardPill
+          ref={pillRef}
+          activeBoardId={activeBoardId}
+          activeBoard={activeBoard}
+          bleStatus={bleStatus}
+          isReplay={isReplay}
+          onOpenSelector={() => setSelectorOpen(true)}
+          onDisconnect={onDisconnect}
+        />
         {/* An Update Warning / Online Block takes over the gear's icon and accent — same treatment
             as an active group ride; a plain available update only badges it with a dot. Settings
             stays this button's one destination, and the update is started from the pill inside. */}
