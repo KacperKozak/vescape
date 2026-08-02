@@ -357,6 +357,9 @@ platform :ios do
 
   desc "Build a signed IPA, ship to TestFlight testers, and stage an App Store draft"
   lane :release do
+    # Create a temporary keychain so match can import the distribution cert in CI.
+    setup_ci
+
     # Authenticate with App Store Connect via API key (no Apple ID password needed).
     # The .p8 file is decoded to RUNNER_TEMP by the workflow and its path exported as
     # ASC_KEY_PATH; KEY_ID and ISSUER_ID come from secrets.
