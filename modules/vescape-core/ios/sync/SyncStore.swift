@@ -62,17 +62,23 @@ internal func commitSyncCursor(_ db: Database, _ name: String, _ throughValue: I
 final class SyncStore: SyncSource {
   private let generationProvider: () -> Int64
   private let onPermanentFailure: (SyncPauseReason, String) -> Void
+  private let database: () -> (any DatabaseWriter)?
 
   init(
     generation: @escaping () -> Int64,
-    onPermanentFailure: @escaping (SyncPauseReason, String) -> Void
+    onPermanentFailure: @escaping (SyncPauseReason, String) -> Void,
+    // Injected so the scan and the cursor commit can be run against a real database in a test. The
+    // default is the shared pool, which is what production always passes.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/sync/SyncStore.kt `database`
+    database: @escaping () -> (any DatabaseWriter)? = { TelemetryDatabase.pool }
   ) {
     self.generationProvider = generation
     self.onPermanentFailure = onPermanentFailure
+    self.database = database
   }
 
   /// Resolved per call: an Account reset replaces the whole database under this object.
-  private var pool: DatabasePool? { TelemetryDatabase.pool }
+  private var pool: (any DatabaseWriter)? { database() }
 
   /// Frames and buckets that name no Board are not offered: the server keys those tables on the
   /// Board and has nowhere to put a sample that belongs to none (ADR-0028). They are unowned local

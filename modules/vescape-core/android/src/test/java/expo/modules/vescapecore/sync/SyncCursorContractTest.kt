@@ -19,6 +19,98 @@ class SyncCursorContractTest {
   private fun daoSource(): String =
     File("src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt").readText()
 
+  private fun storeSource(): String = File("src/main/java/expo/modules/vescapecore/sync/SyncStore.kt").readText()
+
+  /** The `@Query` text attached to a DAO method, whitespace-normalised across its string concatenation. */
+  private fun query(method: String): String =
+    daoSource()
+      .substringBefore("suspend fun $method(")
+      .substringAfterLast("@Query(")
+      .replace("\" +", "")
+      .replace("\"", "")
+      .replace(Regex("\\s+"), " ")
+      .trim()
+
+  /** The table each scan method serves, read from the store rather than restated here. */
+  private fun scanMethods(): Map<SyncTable, String> =
+    Regex("""SyncTable\.(\w+) ->\s*database\(\)\.(\w+)\(cursor, limit\)""")
+      .findAll(storeSource())
+      .associate { SyncTable.valueOf(it.groupValues[1]) to it.groupValues[2] }
+
+  /**
+   * The forward scan, asserted against the SQL that actually runs. Room keeps its queries out of
+   * reach of a JVM test, so this is the only place the comparison, the ordering and the limit are
+   * checked at all — and each of the three is a silent data-loss bug on its own:
+   *
+   * - `>=` instead of `>` re-sends the row at the cursor on every pass, forever
+   * - an unordered or descending scan hands out a row above one it skipped, and the commit then
+   *   moves the cursor past the skipped row, which no later scan can reach
+   * - a missing `LIMIT` ignores the batch budget the byte cap is built on
+   */
+  @Test
+  fun `every scan reads strictly forward from its cursor, in order, under a limit`() {
+    val methods = scanMethods()
+    assertEquals(
+      "every table needs a scan in SyncStore",
+      SyncTable.entries.toSet(),
+      methods.keys,
+    )
+    for ((table, method) in methods) {
+      val sql = query(method)
+      val column = table.cursorColumn
+      // The bound parameter's name is the DAO's business; the comparison is the contract.
+      assertTrue(
+        "$method must read strictly past the cursor, not from it: $sql",
+        sql.contains(Regex("WHERE $column > :\\w+")),
+      )
+      assertTrue("$method must order by $column ascending: $sql", sql.contains("ORDER BY $column ASC"))
+      assertTrue("$method must respect the batch budget: $sql", sql.contains("LIMIT :limit"))
+      assertTrue("$method must read $table's own table: $sql", sql.contains("FROM ${table.table} "))
+    }
+  }
+
+  /**
+   * The position reported for a row has to be the column the scan ordered on. Reporting a row id
+   * from a `sync_seq` scan commits a cursor in the wrong number space — every row below it in the
+   * other space becomes unreachable, with no error anywhere.
+   */
+  @Test
+  fun `each row reports the cursor column its own scan ran on`() {
+    val field = mapOf(SYNC_SEQ_COLUMN to "it.syncSeq", ROW_ID_COLUMN to "it.id")
+    for ((table, method) in scanMethods()) {
+      val mapping = storeSource().substringAfter("database().$method(cursor, limit)").substringBefore("\n")
+      assertTrue(
+        "$method must report ${field.getValue(table.cursorColumn)} — it scans on ${table.cursorColumn}: $mapping",
+        mapping.contains("SyncPendingRow(${field.getValue(table.cursorColumn)},"),
+      )
+    }
+  }
+
+  /** A count that disagrees with the scan reports a drained backlog while rows are still waiting. */
+  @Test
+  fun `every pending count matches its scan's own predicate`() {
+    val counts = Regex("""SyncTable\.(\w+) -> database\(\)\.(\w+)\(cursor\)""")
+      .findAll(storeSource())
+      .associate { SyncTable.valueOf(it.groupValues[1]) to it.groupValues[2] }
+    assertEquals(SyncTable.entries.toSet(), counts.keys)
+    for ((table, method) in counts) {
+      val sql = query(method)
+      val scan = query(scanMethods().getValue(table))
+      assertTrue(
+        "$method must count strictly past the cursor: $sql",
+        sql.contains(Regex("WHERE ${table.cursorColumn} > :\\w+")),
+      )
+      // The unowned-telemetry exclusion is the one predicate that has to appear in both.
+      for (extra in listOf("board_id IS NOT NULL", "board_id != ''")) {
+        assertEquals(
+          "$method and its scan must agree about `$extra`",
+          scan.contains(extra),
+          sql.contains(extra),
+        )
+      }
+    }
+  }
+
   /** The retained tables, and the column whose cursor decides what may be pruned. */
   private val gatedSweeps = mapOf(
     "deleteFramesBeforeUpTo" to "id <= :cursor",

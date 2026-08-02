@@ -14,37 +14,8 @@ import org.junit.Test
  * @parity /modules/vescape-core/ios/sync/SyncEngineTests.swift
  */
 class SyncEngineTest {
-  private class FakeSource(rows: Int = 3) : SyncSource {
-    var remaining = rows
-    val committed = mutableListOf<Map<SyncTable, Long>>()
-    var generation = 0L
-    var failures = mutableListOf<Pair<SyncPauseReason, String>>()
-    var encodeFailure: SyncProtocolException? = null
-    var commitFailure: Exception? = null
-    var rowJson = "\"row\""
-
-    override suspend fun pending(rowLimit: Int): List<SyncPendingTable> {
-      encodeFailure?.let { throw it }
-      if (remaining <= 0) return emptyList()
-      val take = minOf(remaining, 2)
-      val sent = (0 until take).map { SyncPendingRow(cursor = (it + 1).toLong(), json = rowJson) }
-      return listOf(SyncPendingTable(SyncTable.BOARDS, sent))
-    }
-
-    override suspend fun pendingCount(): Int = remaining
-
-    override suspend fun commit(advances: Map<SyncTable, Long>) {
-      commitFailure?.let { throw it }
-      committed += advances
-      remaining -= advances.size.let { 2 }.coerceAtMost(remaining)
-    }
-
-    override fun generation(): Long = generation
-
-    override suspend fun recordPermanentFailure(reason: SyncPauseReason, detail: String) {
-      failures += reason to detail
-    }
-  }
+  /** Two rows per scan, so a backlog of four takes two passes — the shape these cases were written against. */
+  private fun FakeSource(rows: Int = 3) = FakeSyncSource(rows).also { it.scanLimit = 2 }
 
   private fun accepted(boards: Int): String {
     val counts = SyncTable.entries.joinToString(",") {

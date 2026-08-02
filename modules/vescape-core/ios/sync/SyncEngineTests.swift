@@ -7,37 +7,12 @@ import XCTest
 ///
 /// @parity /modules/vescape-core/android/src/test/java/expo/modules/vescapecore/sync/SyncEngineTest.kt
 final class SyncEngineTests: XCTestCase {
-  private final class FakeSource: SyncSource {
-    var remaining: Int
-    var committed: [[SyncTable: Int64]] = []
-    var currentGeneration: Int64 = 0
-    var failures: [(SyncPauseReason, String)] = []
-    var encodeFailure: SyncProtocolError?
-    var commitFailure: Error?
-
-    init(rows: Int) { self.remaining = rows }
-
-    func pending(rowLimit: Int) throws -> [SyncPendingTable] {
-      if let encodeFailure { throw encodeFailure }
-      guard remaining > 0 else { return [] }
-      let take = min(remaining, 2)
-      let rows = (0..<take).map { SyncPendingRow(cursor: Int64($0 + 1), json: "\"row\"") }
-      return [SyncPendingTable(table: .boards, rows: rows)]
-    }
-
-    func pendingCount() -> Int { remaining }
-
-    func commit(_ advances: [SyncTable: Int64]) throws {
-      if let commitFailure { throw commitFailure }
-      committed.append(advances)
-      remaining = max(0, remaining - 2)
-    }
-
-    func generation() -> Int64 { currentGeneration }
-
-    func recordPermanentFailure(_ reason: SyncPauseReason, detail: String) {
-      failures.append((reason, detail))
-    }
+  /// Two rows per scan, so a backlog of four takes two passes — the shape these cases were written
+  /// against.
+  private func FakeSource(rows: Int) -> FakeSyncSource {
+    let source = FakeSyncSource(rows: rows)
+    source.scanLimit = 2
+    return source
   }
 
   private func accepted(boards: Int) -> String {
