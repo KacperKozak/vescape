@@ -69,6 +69,10 @@ modules/vescape-core/*.swiftdeps
 # perf harness output
 perf-results/
 
+# store screenshot harness output + its local fixture database
+screenshots/
+shared/fixtures/screenshot-db.zip
+
 # fastlane build reports (generated, not source)
 fastlane/report.xml
 fastlane/Preview.html

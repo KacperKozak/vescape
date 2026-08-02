@@ -29,6 +29,7 @@
     "skills-check": "bun run scripts/skills-check.ts",
     "screenshot": "bun run scripts/screenshot.ts",
     "e2e": "bun run scripts/e2e.ts",
+    "screenshots": "bun run scripts/screenshots.ts",
     "perf": "bun run scripts/perf-telemetry.ts",
     "test": "bun run copy:shared && bun run test:bun && bun run test:android && bun run test:ios",
     "test:ci": "bun run copy:shared && bun run test:bun && bun run test:android",

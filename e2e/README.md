@@ -80,3 +80,44 @@ bun run perf --label telemetry --seconds 20 --no-setup
 ```
 
 Future board-session flows should use an E2E native simulation mode instead of mocking JS stores. Native still owns Board Session, BLE/GPS, telemetry, and durable storage.
+
+## Store screenshots
+
+`e2e/flows/screenshots/*.yaml` capture the eight store panels from the real app, driven by
+`scripts/screenshots.ts`:
+
+```sh
+bun run screenshots
+```
+
+A screenshot build is a **Release** build with `EXPO_PUBLIC_SCREENSHOTS=1` and `EXPO_PUBLIC_E2E`
+**unset**. That distinction is load-bearing: `EXPO_PUBLIC_E2E=1` reroutes `getBoards`,
+`getLiveState`, `getTelemetryHistory` and friends to `e2eFake`, while `startDebugReplay` always goes
+to native — an E2E build would run a replay session the UI never sees. Screenshot mode uses the real
+native module end to end, and only suppresses developer chrome (replay badge, `REC`, no-board pill,
+render-rate warning).
+
+Data comes from two existing mechanisms, no new native code:
+
+- durable (history, boards, tunes, alerts): a backup zip at `shared/fixtures/screenshot-db.zip`,
+  pushed to the app's external files dir and restored by `restoreDatabase` on startup.
+- live (home hero panel): `startDebugReplay` at 1x through the real telemetry pipeline.
+
+Both `screenshots/` and the fixture zip are gitignored. Without the zip the run still works, with
+empty history.
+
+Iterate on one panel:
+
+```sh
+bun run screenshots --panel 4
+```
+
+Useful flags: `--device <serial>` (capture on an attached device instead of the pinned
+`Vescape_Screenshots` AVD), `--build` (force a rebuild), `--replay <name>` (default
+`replay-thor301`), `--no-wait` (skip the sparkline wait).
+
+The hero panel is captured last. `TelemetryPipeline.liveSeries` buckets the sparkline over
+`liveHistoryLimit` minutes of receipt timestamps, so a full sparkline needs that much wall clock at
+1x. There is deliberately no playback-rate knob — fast-forwarding would compress the samples into a
+fraction of the window instead of filling it. The replay recording must be at least as long as the
+whole run.
