@@ -391,17 +391,32 @@ platform :ios do
       keychain_password: keychain_password
     )
 
+    # Wire the profiles match installed into the Xcode project so both the
+    # archive and export phases can find them. expo prebuild generates manual
+    # signing but leaves PROVISIONING_PROFILE_SPECIFIER empty — set it here.
+    profiles = lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING]
+    [
+      { target: "vescape",      bundle: "app.vescape" },
+      { target: "RideActivity", bundle: "app.vescape.widget" }
+    ].each do |t|
+      update_code_signing_settings(
+        use_automatic_signing: false,
+        path:                  "ios/vescape.xcodeproj",
+        team_id:               ENV["APPLE_TEAM_ID"],
+        code_sign_identity:    "iPhone Distribution",
+        profile_name:          profiles[t[:bundle]],
+        targets:               [t[:target]]
+      )
+    end
+
     # Build a signed IPA from the expo-prebuilt workspace.
-    # CFBundleVersion is set to VERSION_CODE (major*10000 + minor*100 + patch),
-    # matching the Android versionCode convention so builds stay aligned.
-    # export_options passes the profile mapping match resolved so Xcode
-    # doesn't fall back to automatic signing and fail to find them.
+    # CFBundleVersion is set to VERSION_CODE (github run_number).
     build_app(
       workspace:      "ios/vescape.xcworkspace",
       scheme:         "vescape",
       export_method:  "app-store",
       export_options: {
-        provisioningProfiles: lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING]
+        provisioningProfiles: profiles
       },
       xcargs:         "CURRENT_PROJECT_VERSION=#{ENV["VERSION_CODE"]} MARKETING_VERSION=#{ENV["APP_VERSION"]}"
     )
