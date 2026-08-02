@@ -19,9 +19,8 @@
  */
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
 import { basename, join } from 'path'
-import { createInterface } from 'readline/promises'
-import { stdin as input, stdout as output } from 'process'
 import { applicationId } from '../src/config/appVariant.ts'
+import { select, SelectCancelled, type SelectOption } from './lib/select.ts'
 
 const ROOT = join(import.meta.dir, '..')
 const FLOWS_DIR = join(ROOT, 'e2e', 'flows', 'screenshots')
@@ -162,36 +161,32 @@ async function bootAvd(): Promise<string> {
   process.exit(1)
 }
 
-/** `Pixel 6 (emulator-5554)` — the model makes a serial like `adb-54151FDAS00077-…` readable. */
-async function describeDevice(serial: string): Promise<string> {
+/** A serial like `adb-54151FDAS00077-x5XeY4._adb-tls-connect._tcp` is unreadable on its own. */
+async function deviceModel(serial: string): Promise<string | null> {
   const model = (
     await capture(['adb', '-s', serial, 'shell', 'getprop', 'ro.product.model'])
   ).trim()
-  return model ? `${model} (${serial})` : serial
+  return model || null
+}
+
+const BOOT_AVD = Symbol('boot-avd')
+
+/** `adb-54151FDAS00077-x5XeY4._adb-tls-connect._tcp` → `54151FDAS00077`. */
+function shortSerial(serial: string): string {
+  return serial.replace(/^adb-/, '').replace(/-\w+\._adb-tls-connect\._tcp$/, '')
 }
 
 async function chooseDevice(attached: string[]): Promise<string> {
-  const labels = await Promise.all(attached.map(describeDevice))
-  console.log('Select capture device:')
-  labels.forEach((label, index) => {
-    console.log(`${index + 1}. ${label}`)
-  })
-  console.log(`${attached.length + 1}. boot ${AVD_NAME} (pinned 1080x2400 AVD)`)
+  const models = await Promise.all(attached.map(deviceModel))
+  const options: SelectOption<string | typeof BOOT_AVD>[] = attached.map((serial, index) => ({
+    label: models[index] ?? serial,
+    value: serial,
+    hint: shortSerial(serial),
+  }))
+  options.push({ label: `boot ${AVD_NAME}`, value: BOOT_AVD, hint: 'pinned 1080x2400 AVD' })
 
-  const rl = createInterface({ input, output })
-  try {
-    const answer = (await rl.question('Device: ')).trim()
-    const selected = Number.parseInt(answer, 10)
-    if (selected === attached.length + 1) return bootAvd()
-    if (Number.isFinite(selected) && selected >= 1 && selected <= attached.length) {
-      return attached[selected - 1]
-    }
-    if (attached.includes(answer)) return answer
-    console.error(`Unknown device: ${answer}`)
-    process.exit(1)
-  } finally {
-    rl.close()
-  }
+  const choice = await select('Capture device', options)
+  return choice === BOOT_AVD ? bootAvd() : choice
 }
 
 async function resolveDevice(args: Args): Promise<string> {
@@ -367,4 +362,9 @@ try {
   process.exit(1)
 }
 
-await main(args)
+try {
+  await main(args)
+} catch (error) {
+  if (error instanceof SelectCancelled) process.exit(130)
+  throw error
+}

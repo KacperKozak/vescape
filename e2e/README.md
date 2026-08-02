@@ -113,7 +113,7 @@ bun run screenshots --panel 4
 ```
 
 With nothing attached the runner boots the pinned `Vescape_Screenshots` AVD; with several devices
-up it asks which to use. `--device <serial>` skips the picker.
+up it shows an arrow-key picker (↑/↓ or j/k, Enter, Esc to cancel). `--device <serial>` skips it.
 
 Other flags: `--build` (force a rebuild), `--replay <name>` (default `replay-thor301`),
 `--no-wait` (skip the sparkline wait).
