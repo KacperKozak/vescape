@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { forwardRef, useRef, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import {
@@ -25,6 +25,7 @@ import { useBleStore } from '@/modules/board/store/bleStore'
 import { isReplayBoardId } from 'vescape-core'
 import { isNightAtTime } from '@/modules/weather/lib/weather'
 import { routes } from '@/navigation/routes'
+import { screenshotModeEnabled } from '@/config/screenshotMode'
 import type { Board } from '@/modules/board/store/boardStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
@@ -42,6 +43,82 @@ interface TopBarProps {
   onDisconnect: () => void
   onWeatherPress?: () => void
 }
+
+interface BoardPillProps {
+  activeBoardId: string | null
+  activeBoard: Board | undefined
+  bleStatus: string
+  isReplay: boolean
+  onOpenSelector: () => void
+  onDisconnect: () => void
+}
+
+/** The board identity pill: selector, edit, disconnect and the Board Warning control. */
+const BoardPill = forwardRef<View, BoardPillProps>(function BoardPill(
+  { activeBoardId, activeBoard, bleStatus, isReplay, onOpenSelector, onDisconnect },
+  ref,
+) {
+  const canDisconnect =
+    bleStatus === 'connected' ||
+    bleStatus === 'stale' ||
+    bleStatus === 'reconnecting' ||
+    bleStatus === 'rescanning' ||
+    bleStatus === 'waiting_for_telemetry'
+  const name = activeBoard?.name ?? 'No board'
+  const statusColor =
+    bleStatus === 'connected'
+      ? theme.palette.green.color
+      : bleStatus === 'error'
+        ? theme.status.error.color
+        : theme.palette.slate.textSecondary
+
+  return (
+    <View ref={ref} style={styles.pill}>
+      <Pressable
+        style={styles.boardButton}
+        onPress={onOpenSelector}
+        testID="board-selector-trigger"
+        accessibilityLabel="Board selector"
+      >
+        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+        {isReplay && !screenshotModeEnabled && <ReplayBadge />}
+        <Text style={styles.boardText} numberOfLines={1}>
+          {name}
+        </Text>
+        <CaretDownIcon size={12} color={theme.palette.slate.textSecondary} weight="bold" />
+      </Pressable>
+      <View style={styles.divider} />
+      <Pressable
+        style={[styles.plugButton, !activeBoard && styles.iconRoundDisabled]}
+        disabled={!activeBoard}
+        onPress={() => {
+          if (!activeBoard) return
+          router.push({ pathname: routes.editBoard, params: { boardId: activeBoard.id } })
+        }}
+        testID="board-edit-button"
+      >
+        <PencilSimpleIcon
+          size={14}
+          color={activeBoard ? theme.palette.slate.textPrimary : theme.palette.slate.textMuted}
+          weight="bold"
+        />
+      </Pressable>
+      {canDisconnect && (
+        <>
+          <View style={styles.divider} />
+          <Pressable
+            style={styles.plugButton}
+            onPress={onDisconnect}
+            testID="board-disconnect-button"
+          >
+            <PowerIcon size={15} color={theme.status.error.color} weight="bold" />
+          </Pressable>
+        </>
+      )}
+      {activeBoardId && <BoardWarningControl boardId={activeBoardId} />}
+    </View>
+  )
+})
 
 export function TopBar({
   boards,
@@ -76,19 +153,9 @@ export function TopBar({
   const now = new Date()
   const isNight = isNightAtTime(now.getHours(), now.getMinutes(), sunrise, sunset)
 
-  const canDisconnect =
-    bleStatus === 'connected' ||
-    bleStatus === 'stale' ||
-    bleStatus === 'reconnecting' ||
-    bleStatus === 'rescanning' ||
-    bleStatus === 'waiting_for_telemetry'
-  const name = activeBoard?.name ?? 'No board'
-  const statusColor =
-    bleStatus === 'connected'
-      ? theme.palette.green.color
-      : bleStatus === 'error'
-        ? theme.status.error.color
-        : theme.palette.slate.textSecondary
+  // A capture run always has a board in its fixture; if it somehow does not, drop the pill rather
+  // than photograph "No board" chrome.
+  const showBoardPill = !screenshotModeEnabled || activeBoard != null
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
@@ -98,54 +165,22 @@ export function TopBar({
             icon={rideActive ? BroadcastIcon : UsersThreeIcon}
             onPress={() => setSocialOpen(true)}
             accessibilityLabel="Social"
+            testID="social-drawer-trigger"
             dot={nearbyBadge && !rideActive ? theme.palette.groupRide.color : undefined}
             accent={rideActive ? theme.palette.groupRide.color : undefined}
           />
         </View>
-        <View ref={pillRef} style={styles.pill}>
-          <Pressable
-            style={styles.boardButton}
-            onPress={() => setSelectorOpen(true)}
-            testID="board-selector-trigger"
-            accessibilityLabel="Board selector"
-          >
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            {isReplay && <ReplayBadge />}
-            <Text style={styles.boardText} numberOfLines={1}>
-              {name}
-            </Text>
-            <CaretDownIcon size={12} color={theme.palette.slate.textSecondary} weight="bold" />
-          </Pressable>
-          <View style={styles.divider} />
-          <Pressable
-            style={[styles.plugButton, !activeBoard && styles.iconRoundDisabled]}
-            disabled={!activeBoard}
-            onPress={() => {
-              if (!activeBoard) return
-              router.push({ pathname: routes.editBoard, params: { boardId: activeBoard.id } })
-            }}
-            testID="board-edit-button"
-          >
-            <PencilSimpleIcon
-              size={14}
-              color={activeBoard ? theme.palette.slate.textPrimary : theme.palette.slate.textMuted}
-              weight="bold"
-            />
-          </Pressable>
-          {canDisconnect && (
-            <>
-              <View style={styles.divider} />
-              <Pressable
-                style={styles.plugButton}
-                onPress={onDisconnect}
-                testID="board-disconnect-button"
-              >
-                <PowerIcon size={15} color={theme.status.error.color} weight="bold" />
-              </Pressable>
-            </>
-          )}
-          {activeBoardId && <BoardWarningControl boardId={activeBoardId} />}
-        </View>
+        {showBoardPill && (
+          <BoardPill
+            ref={pillRef}
+            activeBoardId={activeBoardId}
+            activeBoard={activeBoard}
+            bleStatus={bleStatus}
+            isReplay={isReplay}
+            onOpenSelector={() => setSelectorOpen(true)}
+            onDisconnect={onDisconnect}
+          />
+        )}
         {/* An Update Warning / Online Block takes over the gear's icon and accent — same treatment
             as an active group ride; a plain available update only badges it with a dot. Settings
             stays this button's one destination, and the update is started from the pill inside. */}

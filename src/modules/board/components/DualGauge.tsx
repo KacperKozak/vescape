@@ -372,11 +372,13 @@ export function DualGauge({
         <View style={styles.gaugeTouchRow}>
           <Pressable
             style={styles.halfPressable}
+            testID="gauge-speed"
             onPress={() => router.push(routes.controlSpeed)}
             android_ripple={interaction.ripple}
           />
           <Pressable
             style={styles.halfPressable}
+            testID="gauge-duty"
             onPress={() => router.push(routes.controlDuty)}
             android_ripple={interaction.ripple}
           />
