@@ -85,6 +85,7 @@ Use one or more app-area labels for filtering:
 | `area:auth`        | `[Auth]`        | Clerk sessions, native Device Tokens, credential lifecycle, and endpoint caller policy        |
 | `area:release`     | `[Release]`     | release automation, Play tracks, versioning, release notes, and GitHub Releases               |
 | `area:assets`      | `[Assets]`      | hosted media, image normalization, upload state, and remote Asset references                  |
+| `area:e2e`         | `[E2E]`         | Maestro E2E flows, screenshot capture tooling, device fixtures and presets                    |
 
 When a PRD or issue-planning skill creates or starts using a new app-area label, update this table in the same turn. Add the label, title prefix, and a short "Use for" description so future PRDs and implementation issues can reuse the prefix consistently.
 
