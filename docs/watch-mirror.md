@@ -23,10 +23,11 @@ The resulting shared commit is the immutable source offered to the Internal buil
 internal-build, Internal status/resume, open-promotion, and production actions.
 Status/resume discovers recent GitHub workflow runs, then shows the live job, step, elapsed time, and
 estimated remaining range; it does not depend on terminal-local state. Open promotion selects one
-successful internal manifest, requires canonical `release-notes/<version>.md`, and promotes the
-manifest's exact existing codes. It never rebuilds or uploads an AAB. Track IDs come from the
-`PLAY_PHONE_INTERNAL_TRACK`, `PLAY_PHONE_OPEN_TRACK`, `PLAY_WEAR_INTERNAL_TRACK`, and
-`PLAY_WEAR_OPEN_TRACK` repository variables. Production targets use
+successful internal manifest and promotes the manifest's exact existing codes. Canonical rider-facing
+notes are bundled by release train from `release-notes/<major>.<minor>.md`; internal builds and open
+promotion tolerate a missing current-train file. Open promotion never rebuilds or uploads an AAB.
+Track IDs come from the `PLAY_PHONE_INTERNAL_TRACK`, `PLAY_PHONE_OPEN_TRACK`,
+`PLAY_WEAR_INTERNAL_TRACK`, and `PLAY_WEAR_OPEN_TRACK` repository variables. Production targets use
 `PLAY_PHONE_PRODUCTION_TRACK` and `PLAY_WEAR_PRODUCTION_TRACK`. Defaults are `internal`, `beta`,
 `production`, `wear:internal`, `wear:beta`, and `wear:production`.
 

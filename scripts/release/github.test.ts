@@ -5,7 +5,10 @@ import {
   createProductionDispatchPayload,
   InvalidWorkflowArtifactError,
   loadValidWorkflowArtifacts,
+  newestSuccessfulArtifact,
   parseArtifactRunIds,
+  parseArtifactRuns,
+  parseReleases,
   parseArtifactJson,
   parseInternalWorkflowRuns,
   parseManifestRunIds,
@@ -16,9 +19,17 @@ import {
   parseWorkflowJobs,
   parseWorkflowRuns,
   retryFailedJobsArgs,
+  trainFreezeWarning,
 } from './github'
 
 describe('release workflow dispatch', () => {
+  test('soft-warns only when train notes changed after first production tag', () => {
+    expect(trainFreezeWarning('release-notes/0.84.md', 'v0.84.0', 100, 101)).toContain(
+      'train is frozen',
+    )
+    expect(trainFreezeWarning('release-notes/0.84.md', 'v0.84.0', 100, 100)).toBeNull()
+  })
+
   test('pins the trusted definition to main and passes source separately', () => {
     const sha = 'ABCDEF0123456789ABCDEF0123456789ABCDEF01'
     const requestId = '7f787fe8-4a30-4fcf-a3b1-4a9dd8606e38'
@@ -117,6 +128,155 @@ describe('release workflow dispatch', () => {
         throw new Error('GitHub unavailable')
       }),
     ).rejects.toThrow('GitHub unavailable')
+  })
+
+  test('stops downloading once the requested number of valid artifacts is reached', async () => {
+    const downloaded: number[] = []
+    const artifacts = await loadValidWorkflowArtifacts(
+      [5, 4, 3],
+      async (runId) => {
+        downloaded.push(runId)
+        return `manifest-${runId}`
+      },
+      1,
+    )
+    expect(artifacts).toEqual([{ runId: 5, artifact: 'manifest-5' }])
+    expect(downloaded).toEqual([5])
+  })
+
+  test('reads track state from the newest successful run, not a newer failed one', async () => {
+    expect(
+      await newestSuccessfulArtifact(
+        [7, 6, 5],
+        async (runId) => ({ runId, ok: runId === 5 }),
+        (artifact) => artifact.ok,
+      ),
+    ).toEqual({
+      success: { runId: 5, artifact: { runId: 5, ok: true } },
+      failures: [
+        { runId: 7, artifact: { runId: 7, ok: false } },
+        { runId: 6, artifact: { runId: 6, ok: false } },
+      ],
+      truncated: false,
+    })
+  })
+
+  test('skips unparseable artifacts without counting them as failures', async () => {
+    expect(
+      await newestSuccessfulArtifact(
+        [5, 4],
+        async (runId) => {
+          if (runId === 5) throw new InvalidWorkflowArtifactError('empty')
+          return { ok: true }
+        },
+        (artifact) => artifact.ok,
+      ),
+    ).toEqual({ success: { runId: 4, artifact: { ok: true } }, failures: [], truncated: false })
+  })
+
+  test('counts unparseable artifacts against the scan budget', async () => {
+    const downloaded: number[] = []
+    await newestSuccessfulArtifact(
+      [9, 8, 7, 6, 5],
+      async (runId) => {
+        downloaded.push(runId)
+        throw new InvalidWorkflowArtifactError('empty')
+      },
+      () => true,
+      2,
+    )
+    expect(downloaded).toEqual([9, 8])
+  })
+
+  test('reports a truncated scan so an unread history is not read as never-published', async () => {
+    const outcome = await newestSuccessfulArtifact(
+      [9, 8, 7],
+      async () => ({ ok: false }),
+      (artifact) => artifact.ok,
+      2,
+    )
+    expect(outcome).toEqual({
+      success: null,
+      failures: [
+        { runId: 9, artifact: { ok: false } },
+        { runId: 8, artifact: { ok: false } },
+      ],
+      truncated: true,
+    })
+  })
+
+  test('does not report truncation when the whole history was scanned', async () => {
+    const outcome = await newestSuccessfulArtifact(
+      [9],
+      async () => ({ ok: false }),
+      (artifact) => artifact.ok,
+      5,
+    )
+    expect(outcome.truncated).toBe(false)
+  })
+
+  test('stops scanning after the cap so a long failure history cannot stall the dashboard', async () => {
+    const downloaded: number[] = []
+    const outcome = await newestSuccessfulArtifact(
+      [9, 8, 7, 6],
+      async (runId) => {
+        downloaded.push(runId)
+        return { ok: false }
+      },
+      (artifact) => artifact.ok,
+      2,
+    )
+    expect(outcome.success).toBeNull()
+    expect(downloaded).toEqual([9, 8])
+  })
+
+  test('lists artifact runs newest first with creation time, ignoring duplicates', () => {
+    expect(
+      parseArtifactRuns(
+        {
+          artifacts: [
+            {
+              name: 'release-manifest',
+              expired: false,
+              created_at: '2026-08-01T10:00:00Z',
+              workflow_run: { id: 7 },
+            },
+            {
+              name: 'release-manifest',
+              expired: false,
+              created_at: '2026-08-01T11:00:00Z',
+              workflow_run: { id: 9 },
+            },
+            {
+              name: 'release-manifest',
+              expired: false,
+              created_at: '2026-08-01T10:00:00Z',
+              workflow_run: { id: 7 },
+            },
+            { name: 'release-manifest', expired: true, workflow_run: { id: 11 } },
+            { name: 'promotion-manifest', expired: false, workflow_run: { id: 12 } },
+          ],
+        },
+        'release-manifest',
+      ),
+    ).toEqual([
+      { runId: 9, createdAt: '2026-08-01T11:00:00Z' },
+      { runId: 7, createdAt: '2026-08-01T10:00:00Z' },
+    ])
+  })
+
+  test('keeps only prerelease tags from the release listing', () => {
+    expect(
+      parseReleases([
+        { tagName: 'v1.8.0', isPrerelease: true },
+        { tagName: 'v1.7.1', isPrerelease: false },
+        { tagName: 'broken' },
+      ]),
+    ).toEqual([
+      { tagName: 'v1.8.0', isPrerelease: true },
+      { tagName: 'v1.7.1', isPrerelease: false },
+    ])
+    expect(() => parseReleases({})).toThrow('Release listing is invalid')
   })
 
   test('dispatches exact candidate identity from trusted main', () => {

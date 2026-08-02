@@ -89,9 +89,9 @@ jobs:
           git fetch origin main
           git merge-base --is-ancestor "$SOURCE_SHA" origin/main
           test "$(git show "$SOURCE_SHA:package.json" | jq -r .version)" = "$MARKETING_VERSION"
-          git cat-file -e "$SOURCE_SHA:release-notes/$MARKETING_VERSION.md"
-          mkdir -p release-notes
-          git show "$SOURCE_SHA:release-notes/$MARKETING_VERSION.md" > "release-notes/$MARKETING_VERSION.md"
+          IFS=. read -r TRAIN_MAJOR TRAIN_MINOR _ <<< "$MARKETING_VERSION"
+          TRAIN_VERSION="$TRAIN_MAJOR.$TRAIN_MINOR"
+          git cat-file -e "$SOURCE_SHA:release-notes/$TRAIN_VERSION.md"
         env:
           REQUEST_ID: ${{ inputs.request_id }}
           OPEN_PROMOTION_RUN_ID: ${{ inputs.open_promotion_run_id }}
@@ -158,28 +158,25 @@ jobs:
         run: |
           jq -n --argjson code "$WEAR_VERSION_CODE" --arg source "$WEAR_OPEN_TRACK" --arg target "$WEAR_PRODUCTION_TRACK" \
             '{versionCode:$code,sourceTrack:$source,targetTrack:$target,status:"failed",playStatus:null,rolloutPercentage:null}' > wear-result.json
-      - name: Create immutable tag and GitHub Release
+      - name: Flip existing GitHub prerelease to latest release
         id: github_release
         if: inputs.operation == 'promote' && steps.phone.outcome == 'success' && steps.wear.outcome == 'success'
         continue-on-error: true
         run: |
           TAG="v$MARKETING_VERSION"
           git fetch origin --tags
-          if git rev-parse --verify "$TAG^{commit}" >/dev/null 2>&1; then
-            test "$(git rev-parse "$TAG^{commit}")" = "$SOURCE_SHA"
+          test "$(git rev-parse "$TAG^{commit}")" = "$SOURCE_SHA"
+          RELEASE_STATE="$(gh release view "$TAG" --json isDraft,isPrerelease --jq '[.isDraft,.isPrerelease] | @tsv')"
+          LATEST_TAG="$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          if test "$RELEASE_STATE" = $'false\tfalse' && test "$LATEST_TAG" = "$TAG"; then
+            echo already-released > github-release-status.txt
           else
-            git tag "$TAG" "$SOURCE_SHA"
-            git push origin "refs/tags/$TAG"
-          fi
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            test "$(cat "release-notes/$MARKETING_VERSION.md")" = "$(gh release view "$TAG" --json body --jq .body)"
-            echo existing > github-release-status.txt
-          else
-            gh release create "$TAG" --verify-tag --notes-file "release-notes/$MARKETING_VERSION.md"
-            echo created > github-release-status.txt
+            gh release edit "$TAG" --prerelease=false --latest
+            echo released > github-release-status.txt
           fi
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           MARKETING_VERSION: ${{ inputs.marketing_version }}
       - name: Record GitHub finalization state

@@ -5,7 +5,7 @@ import MarkdownIt from 'markdown-it'
 
 import {
   compareMarketingVersions,
-  parseMarketingVersion,
+  parseReleaseTrain,
   type BundledReleaseNote,
 } from '../../src/modules/release/lib/releaseNotes'
 
@@ -50,8 +50,8 @@ export function validateReleaseMarkdown(source: string, label = 'Release note'):
 export function compileReleaseNotes(notes: readonly CanonicalReleaseNote[]): string {
   const versions = new Set<string>()
   for (const note of notes) {
-    if (!parseMarketingVersion(note.version)) {
-      throw new Error(`${note.fileName} is not named with a marketing version`)
+    if (!parseReleaseTrain(note.version) || note.fileName !== `${note.version}.md`) {
+      throw new Error(`${note.fileName} is not named with a release train (X.X.md)`)
     }
     if (versions.has(note.version))
       throw new Error(`Duplicate release-note version ${note.version}`)

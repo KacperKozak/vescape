@@ -108,7 +108,7 @@ export interface ProductionManifest {
   requestedRolloutPercentage: number | null
   phone: ProductionArtifactResult
   wear: ProductionArtifactResult
-  githubRelease: 'created' | 'existing' | 'skipped' | 'failed'
+  githubRelease: 'released' | 'already-released' | 'skipped' | 'failed'
 }
 
 export function parseReleaseManifest(value: unknown): ReleaseManifest {
@@ -230,7 +230,7 @@ export function parseProductionManifest(value: unknown): ProductionManifest {
     operationNeedsPercentage !== (typeof manifest.requestedRolloutPercentage === 'number') ||
     !validArtifact(manifest.phone) ||
     !validArtifact(manifest.wear) ||
-    !['created', 'existing', 'skipped', 'failed'].includes(manifest.githubRelease ?? '')
+    !['released', 'already-released', 'skipped', 'failed'].includes(manifest.githubRelease ?? '')
   ) {
     throw new Error('Production manifest has an invalid shape')
   }

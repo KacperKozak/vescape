@@ -2,6 +2,8 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { buildReleaseNotes, validateReleaseMarkdown } from '../release-notes/bundler'
 import { resolveEditorCommand } from '../release-notes/editor'
+import { selectPrompt } from '../release-notes/prompt'
+import { openEditor, reviewReleaseNoteDraft } from '../release-notes/review'
 
 const ROOT = join(import.meta.dir, '../..')
 const PACKAGE_PATH = join(ROOT, 'package.json')
@@ -72,15 +74,150 @@ export function assertReleasePreparationStatus({
   const isNextVersion = [...validNextVersions].some(
     (bump) => bumpMarketingVersion(baseVersion, bump) === workingVersion,
   )
-  const notesPath = `release-notes/${workingVersion}.md`
+  const notesPath = releaseTrainNotesPath(workingVersion)
   const expected = new Set(['package.json', notesPath])
   const isExactDraft =
     isNextVersion &&
-    noteExists &&
     changedPaths.includes('package.json') &&
-    changedPaths.every((path) => expected.has(path))
+    changedPaths.every((path) => expected.has(path)) &&
+    (!changedPaths.includes(notesPath) || noteExists)
   if (!isExactDraft) {
     throw new Error('Commit or stash current changes before preparing a release version')
+  }
+}
+
+export function releaseTrain(version: string): string {
+  const match = /^(\d+)\.(\d+)\.\d+(?:-[0-9A-Za-z.-]+)?$/.exec(version)
+  if (!match) throw new Error(`Cannot resolve release train for "${version}"`)
+  return `${match[1]}.${match[2]}`
+}
+
+export function releaseTrainNotesPath(version: string): string {
+  return `release-notes/${releaseTrain(version)}.md`
+}
+
+type TrainNotesChoice = 'draft' | 'skip' | 'keep' | 'edit' | 'reprompt'
+
+interface TrainNotesDependencies {
+  exists(path: string): Promise<boolean>
+  read(path: string): Promise<string>
+  select(options: readonly TrainNotesChoice[]): Promise<TrainNotesChoice>
+  author(train: string): Promise<void>
+  edit(path: string): Promise<void>
+  reprompt(path: string, commits: string): Promise<void>
+  commits(path: string): Promise<string>
+  validate(source: string, label: string): void
+  build(): Promise<void>
+  log(message: string): void
+}
+
+export async function prepareTrainNotes(
+  bump: VersionBump,
+  marketingVersion: string,
+  dependencies: TrainNotesDependencies = trainNotesDependencies(),
+): Promise<string> {
+  const notesPath = releaseTrainNotesPath(marketingVersion)
+  const notes = join(ROOT, notesPath)
+  const exists = await dependencies.exists(notes)
+
+  if (!exists) {
+    dependencies.log(`\nNo canonical notes exist for train ${releaseTrain(marketingVersion)}.`)
+    const choice = await dependencies.select(['draft', 'skip'])
+    if (choice === 'draft') await dependencies.author(releaseTrain(marketingVersion))
+    if (await dependencies.exists(notes)) {
+      dependencies.validate(await dependencies.read(notes), notesPath)
+      await dependencies.build()
+    } else {
+      dependencies.log(`✓ Skipping ${notesPath}; production promotion will require it`)
+    }
+    return notesPath
+  }
+
+  if (bump !== 'patch') {
+    dependencies.validate(await dependencies.read(notes), notesPath)
+    await dependencies.build()
+    dependencies.log(`\n✓ Using existing ${notesPath}`)
+    return notesPath
+  }
+
+  const commits = await dependencies.commits(notesPath)
+  dependencies.log(`\nCommits since ${notesPath} was last modified:`)
+  dependencies.log(commits || '  (none)')
+  const choice = await dependencies.select(['keep', 'edit', 'reprompt'])
+  if (choice === 'edit') await dependencies.edit(notes)
+  if (choice === 'reprompt') await dependencies.reprompt(notes, commits)
+  dependencies.validate(await dependencies.read(notes), notesPath)
+  await dependencies.build()
+  return notesPath
+}
+
+async function commitsSinceTrainNotes(notesPath: string): Promise<string> {
+  const lastModified = await checked(
+    'git',
+    ['log', '-1', '--format=%H', '--', notesPath],
+    `Cannot find history for ${notesPath}`,
+  )
+  if (!lastModified) return ''
+  return checked(
+    'git',
+    ['log', '--oneline', `${lastModified}..HEAD`],
+    `Cannot list commits since ${notesPath} changed`,
+  )
+}
+
+function trainNotesDependencies(): TrainNotesDependencies {
+  const editorCommand = resolveEditorCommand()
+  return {
+    exists: async (path) => Bun.file(path).exists(),
+    read: (path) => readFile(path, 'utf8'),
+    select: async (options) => {
+      if (options.includes('draft')) {
+        return selectPrompt('Prepare release-train notes', [
+          { value: 'draft', label: 'Draft with Codex', shortcut: 'd' },
+          { value: 'skip', label: 'Skip for now', shortcut: 's' },
+        ] as const)
+      }
+      return selectPrompt('Update release-train notes', [
+        { value: 'keep', label: 'Keep current notes', shortcut: 'k' },
+        { value: 'edit', label: `Edit in ${editorCommand[0]}`, shortcut: 'e' },
+        { value: 'reprompt', label: 'Re-prompt Codex with new commits', shortcut: 'r' },
+      ] as const)
+    },
+    author: async (train) => {
+      const author = await command(
+        'bun',
+        ['run', 'release-notes:author', `--version=${train}`],
+        true,
+      )
+      if (author.exitCode !== 0) {
+        throw new Error(`Release-note authoring exited with code ${author.exitCode}`)
+      }
+    },
+    edit: (path) => openEditor(path, editorCommand),
+    reprompt: async (path, commits) => {
+      const current = await readFile(path, 'utf8')
+      await reviewReleaseNoteDraft({
+        root: ROOT,
+        destination: path,
+        label: path.slice(ROOT.length + 1),
+        editorCommand,
+        replace: true,
+        initialPrompt: [
+          'Update the current Vescape release-train notes with the new commits listed below.',
+          'Read .agents/skills/release-notes/SKILL.md and follow its editorial policy exactly.',
+          'Inspect the commits and relevant source before writing.',
+          'Preserve important existing rider-visible outcomes; merge new outcomes into the right sections.',
+          'Use only ## New, ## Improved, and ## Fixed, in that order, omitting empty sections.',
+          'Do not modify the working tree. Return only the complete Markdown replacement.',
+          `\nCurrent train notes:\n${current}`,
+          `\nNew commits:\n${commits || '(none)'}`,
+        ].join('\n'),
+      })
+    },
+    commits: commitsSinceTrainNotes,
+    validate: validateReleaseMarkdown,
+    build: buildReleaseNotes,
+    log: console.log,
   }
 }
 
@@ -107,7 +244,7 @@ export async function verifyReleasePreparationReady(): Promise<void> {
     baseVersion,
     workingVersion: pkg.version,
     changedPaths,
-    noteExists: await Bun.file(join(ROOT, `release-notes/${pkg.version}.md`)).exists(),
+    noteExists: await Bun.file(join(ROOT, releaseTrainNotesPath(pkg.version))).exists(),
   })
 }
 
@@ -148,27 +285,7 @@ export async function prepareReleaseCandidate(
     await writeFile(PACKAGE_PATH, `${JSON.stringify(pkg, null, 2)}\n`)
   }
 
-  const notesPath = `release-notes/${marketingVersion}.md`
-  const notes = join(ROOT, notesPath)
-  if (await Bun.file(notes).exists()) {
-    validateReleaseMarkdown(await readFile(notes, 'utf8'), notesPath)
-    await buildReleaseNotes()
-    console.log(`\n✓ Using existing ${notesPath}`)
-  } else {
-    const author = await command(
-      'bun',
-      ['run', 'release-notes:author', `--version=${marketingVersion}`],
-      true,
-    )
-    if (author.exitCode !== 0 || !(await Bun.file(notes).exists())) {
-      if (!(await Bun.file(notes).exists())) await writeFile(PACKAGE_PATH, originalPackage)
-      throw new Error(
-        author.exitCode === 0
-          ? 'Release notes were discarded; version change was rolled back'
-          : `Release-note authoring exited with code ${author.exitCode}`,
-      )
-    }
-  }
+  const notesPath = await prepareTrainNotes(bump, marketingVersion)
 
   const status = await checked('git', ['status', '--porcelain'], 'Cannot inspect release changes')
   const changedPaths = parsePorcelainPaths(status)
@@ -177,11 +294,13 @@ export async function prepareReleaseCandidate(
   if (unexpected.length > 0) {
     throw new Error(`Unexpected release changes: ${unexpected.join(', ')}`)
   }
-  if (!changedPaths.includes('package.json') || !(await Bun.file(notes).exists())) {
-    throw new Error('Release preparation did not produce a version and canonical notes')
+  if (!changedPaths.includes('package.json')) {
+    throw new Error('Release preparation did not produce a version change')
   }
 
-  await checked('git', ['add', 'package.json', notesPath], 'Cannot stage release candidate')
+  const pathsToStage = ['package.json']
+  if (changedPaths.includes(notesPath)) pathsToStage.push(notesPath)
+  await checked('git', ['add', ...pathsToStage], 'Cannot stage release candidate')
   await checked('git', ['commit', '-m', marketingVersion], 'Cannot commit release candidate')
   try {
     await checked('git', ['checkout', 'main'], 'Cannot switch to main')

@@ -89,6 +89,17 @@ jobs:
           echo "wear_code=$WEAR_CODE" >> "$GITHUB_OUTPUT"
       - run: bun install --frozen-lockfile
       - run: bun run copy:shared
+      - name: Verify production runtime configuration
+        run: bun run scripts/release/verifyProductionConfig.ts
+        env:
+          EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN: ${{ secrets.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN }}
+          EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY }}
+          EXPO_PUBLIC_MAPY_API_KEY: ${{ secrets.EXPO_PUBLIC_MAPY_API_KEY }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       - name: Generate Android project
         run: bunx expo prebuild --platform android --no-install
         env:
@@ -99,8 +110,6 @@ jobs:
           EXPO_PUBLIC_MAPY_API_KEY: ${{ secrets.EXPO_PUBLIC_MAPY_API_KEY }}
           EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
-          EXPO_PUBLIC_POSTHOG_API_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_API_KEY }}
-          EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -132,11 +141,14 @@ jobs:
           EXPO_PUBLIC_MAPY_API_KEY: ${{ secrets.EXPO_PUBLIC_MAPY_API_KEY }}
           EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
-          EXPO_PUBLIC_POSTHOG_API_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_API_KEY }}
-          EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      - name: Verify native Sentry init in release artifact
+        run: |
+          MERGED=$(find android/app/build/intermediates/merged_manifests/release -name AndroidManifest.xml | head -n 1)
+          test -n "$MERGED"
+          bun run scripts/release/verifySentryNativeInit.ts "$MERGED"
       - name: Verify signing relationship and record artifact identity
         run: |
           PHONE=android/app/build/outputs/bundle/release/app-release.aab

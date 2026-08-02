@@ -10,6 +10,7 @@ import type {
   WorkflowRun,
 } from './contracts'
 import { parseProductionManifest, parsePromotionManifest, parseReleaseManifest } from './contracts'
+import { releaseTrainNotesPath } from './prepare'
 
 const WORKFLOW_FILE = 'release-android.yml'
 const PROMOTION_WORKFLOW_FILE = 'promote-open.yml'
@@ -35,6 +36,17 @@ async function checkedGh(args: string[], label: string): Promise<string> {
   const result = await gh(args)
   if (result.exitCode !== 0) throw new Error(`${label}: ${result.stderr || result.stdout}`)
   return result.stdout
+}
+
+async function checkedGit(args: string[], label: string): Promise<string> {
+  const process = Bun.spawn(['git', ...args], { stdout: 'pipe', stderr: 'pipe' })
+  const [exitCode, stdout, stderr] = await Promise.all([
+    process.exited,
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+  ])
+  if (exitCode !== 0) throw new Error(`${label}: ${stderr.trim() || stdout.trim()}`)
+  return stdout.trim()
 }
 
 export interface DispatchPayload {
@@ -90,7 +102,13 @@ export interface ProductionDispatchPayload {
 interface ActionsArtifact {
   name: string
   expired: boolean
+  created_at?: string
   workflow_run?: { id?: number }
+}
+
+export interface ArtifactRun {
+  runId: number
+  createdAt: string | null
 }
 
 export function createDispatchPayload(
@@ -513,12 +531,19 @@ function parseWorkflowArtifact<T>(
   }
 }
 
+/**
+ * Downloads artifacts in id order, skipping ones whose payload no longer parses. `limit` stops
+ * after that many valid artifacts — the dashboard only needs the newest per track, and each
+ * download is a slow `gh run download` round trip.
+ */
 export async function loadValidWorkflowArtifacts<T>(
   runIds: readonly number[],
   load: (runId: number) => Promise<T>,
+  limit = Number.POSITIVE_INFINITY,
 ): Promise<Array<{ runId: number; artifact: T }>> {
   const artifacts: Array<{ runId: number; artifact: T }> = []
   for (const runId of runIds) {
+    if (artifacts.length >= limit) break
     try {
       artifacts.push({ runId, artifact: await load(runId) })
     } catch (error) {
@@ -529,37 +554,105 @@ export async function loadValidWorkflowArtifacts<T>(
   return artifacts
 }
 
-export function parseArtifactRunIds(value: unknown, artifactName: string): number[] {
+export interface WorkflowArtifact<T> {
+  runId: number
+  artifact: T
+}
+
+export interface NewestArtifactOutcome<T> {
+  success: WorkflowArtifact<T> | null
+  /** Failed runs newer than `success` — work that was attempted and did not land. */
+  failures: Array<WorkflowArtifact<T>>
+  /**
+   * The scan hit `maxScan` before finding a success, so older state may exist unread. Without
+   * this a truncated scan is indistinguishable from "this track was never published".
+   */
+  truncated: boolean
+}
+
+/**
+ * Walks newest-first until it finds an artifact that records a successful operation, collecting
+ * the newer failures on the way. A failed run never advanced a track, so it must not be read as
+ * track state — but it does need surfacing, and it must not mask the retry.
+ *
+ * Every download attempt consumes scan budget, including ones that fail to parse: the bound
+ * exists to cap dashboard latency, and unparseable artifacts cost the same round trip.
+ */
+export async function newestSuccessfulArtifact<T>(
+  runIds: readonly number[],
+  load: (runId: number) => Promise<T>,
+  succeeded: (artifact: T) => boolean,
+  maxScan = 5,
+): Promise<NewestArtifactOutcome<T>> {
+  const failures: Array<WorkflowArtifact<T>> = []
+  let scanned = 0
+  for (const runId of runIds) {
+    if (scanned >= maxScan) return { success: null, failures, truncated: true }
+    scanned += 1
+    let artifact: T
+    try {
+      artifact = await load(runId)
+    } catch (error) {
+      if (error instanceof InvalidWorkflowArtifactError) continue
+      throw error
+    }
+    if (succeeded(artifact)) return { success: { runId, artifact }, failures, truncated: false }
+    failures.push({ runId, artifact })
+  }
+  return { success: null, failures, truncated: false }
+}
+
+export function parseArtifactRuns(value: unknown, artifactName: string): ArtifactRun[] {
   if (!value || typeof value !== 'object') throw new Error('Artifacts response is invalid')
   const artifacts = (value as { artifacts?: unknown }).artifacts
   if (!Array.isArray(artifacts)) throw new Error('Artifacts response has no artifacts')
-  return [
-    ...new Set(
-      artifacts
-        .filter(
-          (artifact): artifact is ActionsArtifact =>
-            !!artifact &&
-            typeof artifact === 'object' &&
-            (artifact as ActionsArtifact).name === artifactName &&
-            (artifact as ActionsArtifact).expired === false &&
-            Number.isSafeInteger((artifact as ActionsArtifact).workflow_run?.id),
-        )
-        .map((artifact) => artifact.workflow_run!.id!),
-    ),
-  ]
+  const seen = new Set<number>()
+  const runs: ArtifactRun[] = []
+  for (const artifact of artifacts as ActionsArtifact[]) {
+    if (
+      !artifact ||
+      typeof artifact !== 'object' ||
+      artifact.name !== artifactName ||
+      artifact.expired !== false ||
+      !Number.isSafeInteger(artifact.workflow_run?.id)
+    )
+      continue
+    const runId = artifact.workflow_run!.id!
+    if (seen.has(runId)) continue
+    seen.add(runId)
+    runs.push({ runId, createdAt: artifact.created_at ?? null })
+  }
+  return runs.sort((left, right) => right.runId - left.runId)
+}
+
+export function parseArtifactRunIds(value: unknown, artifactName: string): number[] {
+  return parseArtifactRuns(value, artifactName).map((run) => run.runId)
 }
 
 export function parseManifestRunIds(value: unknown): number[] {
   return parseArtifactRunIds(value, 'release-manifest')
 }
 
-export async function listInternalCandidates(repo: string): Promise<ReleaseManifest[]> {
+/**
+ * Lists workflow runs that published `artifactName`, newest first. One cheap API call, no
+ * artifact downloads — the dashboard counts pending work from these ids alone.
+ */
+export async function listArtifactRuns(
+  repo: string,
+  artifactName: string,
+  perPage = 30,
+): Promise<ArtifactRun[]> {
   const output = await checkedGh(
-    ['api', `repos/${repo}/actions/artifacts?name=release-manifest&per_page=30`],
-    'Cannot list internal release manifests',
+    ['api', `repos/${repo}/actions/artifacts?name=${artifactName}&per_page=${perPage}`],
+    `Cannot list ${artifactName} artifacts`,
   )
+  return parseArtifactRuns(JSON.parse(output), artifactName)
+}
+
+export async function listInternalCandidates(repo: string): Promise<ReleaseManifest[]> {
+  const runs = await listArtifactRuns(repo, 'release-manifest')
   const artifacts = await loadValidWorkflowArtifacts(
-    parseManifestRunIds(JSON.parse(output)),
+    runs.map((run) => run.runId),
     downloadManifest,
   )
   const candidates: ReleaseManifest[] = []
@@ -572,13 +665,10 @@ export async function listInternalCandidates(repo: string): Promise<ReleaseManif
 }
 
 export async function listProductionCandidates(repo: string): Promise<ProductionCandidate[]> {
-  const output = await checkedGh(
-    ['api', `repos/${repo}/actions/artifacts?name=promotion-manifest&per_page=30`],
-    'Cannot list open-promotion manifests',
-  )
+  const runs = await listArtifactRuns(repo, 'promotion-manifest')
   const candidates: ProductionCandidate[] = []
   const openArtifacts = await loadValidWorkflowArtifacts(
-    parseArtifactRunIds(JSON.parse(output), 'promotion-manifest'),
+    runs.map((run) => run.runId),
     downloadPromotionManifest,
   )
   for (const { runId: openPromotionRunId, artifact: open } of openArtifacts) {
@@ -646,18 +736,84 @@ export async function canonicalNotesPath(
   marketingVersion: string,
   ref = 'main',
 ): Promise<string> {
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(marketingVersion))
-    throw new Error(`Invalid marketing version "${marketingVersion}"`)
-  const path = `release-notes/${marketingVersion}.md`
+  const path = releaseTrainNotesPath(marketingVersion)
+  const train = path.slice('release-notes/'.length, -'.md'.length)
   await checkedGh(
     [
       'api',
-      `repos/${repo}/contents/release-notes/${encodeURIComponent(marketingVersion)}.md?ref=${encodeURIComponent(ref)}`,
+      `repos/${repo}/contents/release-notes/${encodeURIComponent(train)}.md?ref=${encodeURIComponent(ref)}`,
       '--silent',
     ],
     `Canonical release notes missing at ${path} on ${ref}`,
   )
   return path
+}
+
+export interface GitHubRelease {
+  tagName: string
+  isPrerelease: boolean
+}
+
+export function parseReleases(value: unknown): GitHubRelease[] {
+  if (!Array.isArray(value)) throw new Error('Release listing is invalid')
+  return value
+    .filter(
+      (entry): entry is { tagName: string; isPrerelease: boolean } =>
+        !!entry &&
+        typeof entry === 'object' &&
+        typeof (entry as { tagName?: unknown }).tagName === 'string' &&
+        typeof (entry as { isPrerelease?: unknown }).isPrerelease === 'boolean',
+    )
+    .map((entry) => ({ tagName: entry.tagName, isPrerelease: entry.isPrerelease }))
+}
+
+/** Prerelease tags are cut after internal; they graduate to a full release only at production. */
+export async function listPrereleaseTags(repo: string, limit = 20): Promise<string[]> {
+  const output = await checkedGh(
+    ['release', 'list', '--repo', repo, '--limit', String(limit), '--json', 'tagName,isPrerelease'],
+    'Cannot list GitHub releases',
+  )
+  return parseReleases(JSON.parse(output))
+    .filter((release) => release.isPrerelease)
+    .map((release) => release.tagName)
+}
+
+export function trainFreezeWarning(
+  notesPath: string,
+  firstProductionTag: string,
+  firstProductionAt: number,
+  notesModifiedAt: number,
+): string | null {
+  if (notesModifiedAt <= firstProductionAt) return null
+  return `${notesPath} changed after ${firstProductionTag} reached production; train is frozen. Put late release notes in next train.`
+}
+
+export async function releaseTrainFreezeWarning(marketingVersion: string): Promise<string | null> {
+  const notesPath = releaseTrainNotesPath(marketingVersion)
+  const train = notesPath.slice('release-notes/'.length, -'.md'.length)
+  await checkedGit(['fetch', 'origin', 'main', '--tags'], 'Cannot refresh release train history')
+  const tags = await checkedGit(
+    [
+      'for-each-ref',
+      '--sort=creatordate',
+      '--format=%(refname:short) %(creatordate:unix)',
+      `refs/tags/v${train}.*`,
+    ],
+    `Cannot inspect production tags for train ${train}`,
+  )
+  const first = tags.split('\n').find((line) => line.length > 0)
+  if (!first) return null
+  const match = /^(v\S+) (\d+)$/.exec(first)
+  if (!match) throw new Error(`Invalid production tag metadata "${first}"`)
+  const notesModifiedAt = Number(
+    await checkedGit(
+      ['log', '-1', '--format=%ct', 'origin/main', '--', notesPath],
+      `Cannot inspect history for ${notesPath}`,
+    ),
+  )
+  if (!Number.isSafeInteger(notesModifiedAt) || notesModifiedAt < 1)
+    throw new Error(`Cannot find history for ${notesPath}`)
+  return trainFreezeWarning(notesPath, match[1], Number(match[2]), notesModifiedAt)
 }
 
 export async function downloadPromotionManifest(runId: number): Promise<PromotionManifest> {
