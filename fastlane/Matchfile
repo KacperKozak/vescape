@@ -1,0 +1,12 @@
+git_url(ENV["MATCH_GIT_URL"])
+storage_mode("git")
+type("appstore")
+
+# Main app + Live Activity widget extension.
+# Confirm the widget bundle id from the generated ios/ project after first prebuild;
+# @bacons/apple-targets typically derives it as "<parent>.<TargetName>".
+app_identifier(["app.vescape", "app.vescape.widget"])
+
+# In CI the workflow sets CI=true; match runs read-only so no Apple auth is
+# needed at build time — credentials are only needed for the one-time bootstrap.
+readonly(ENV["CI"] == "true")

@@ -342,3 +342,70 @@ platform :android do
     )
   end
 end
+
+platform :ios do
+  desc "One-time bootstrap: generate distribution cert + provisioning profiles and push to the certs repo"
+  lane :bootstrap_certs do
+    api_key = app_store_connect_api_key(
+      key_id:       ENV["ASC_KEY_ID"],
+      issuer_id:    ENV["ASC_ISSUER_ID"],
+      key_filepath: ENV["ASC_KEY_PATH"],
+      in_house:     false
+    )
+    match(type: "appstore", api_key: api_key, readonly: false)
+  end
+
+  desc "Build a signed IPA, ship to TestFlight testers, and stage an App Store draft"
+  lane :release do
+    # Create a temporary keychain so match can import the distribution cert in CI.
+    setup_ci
+
+    # Authenticate with App Store Connect via API key (no Apple ID password needed).
+    # The .p8 file is decoded to RUNNER_TEMP by the workflow and its path exported as
+    # ASC_KEY_PATH; KEY_ID and ISSUER_ID come from secrets.
+    api_key = app_store_connect_api_key(
+      key_id:        ENV["ASC_KEY_ID"],
+      issuer_id:     ENV["ASC_ISSUER_ID"],
+      key_filepath:  ENV["ASC_KEY_PATH"],
+      in_house:      false
+    )
+
+    # Pull the distribution certificate + provisioning profiles from the private
+    # certs repo. The workflow sets CI=true so match runs in read-only mode.
+    match(
+      type:       "appstore",
+      api_key:    api_key,
+      readonly:   ENV["CI"] == "true"
+    )
+
+    # Build a signed IPA from the expo-prebuilt workspace.
+    # CFBundleVersion is set to VERSION_CODE (major*10000 + minor*100 + patch),
+    # matching the Android versionCode convention so builds stay aligned.
+    build_app(
+      workspace:      "ios/vescape.xcworkspace",
+      scheme:         "vescape",
+      export_method:  "app-store",
+      xcargs:         "CURRENT_PROJECT_VERSION=#{ENV["VERSION_CODE"]} MARKETING_VERSION=#{ENV["APP_VERSION"]}"
+    )
+
+    # Step 1: Upload to TestFlight and distribute to testers immediately.
+    # Skip waiting for processing so the lane doesn't block for 10-30 min.
+    upload_to_testflight(
+      api_key:                              api_key,
+      skip_waiting_for_build_processing:    true,
+      distribute_external:                  false
+    )
+
+    # Step 2: Create an App Store draft at the same version so you can review
+    # and manually submit for review in App Store Connect — mirrors the Android
+    # production-draft step in the Play Console.
+    upload_to_app_store(
+      api_key:              api_key,
+      submit_for_review:    false,
+      automatic_release:    false,
+      skip_metadata:        true,
+      skip_screenshots:     true,
+      skip_binary_upload:   true   # reuse the build already uploaded via TestFlight
+    )
+  end
+end

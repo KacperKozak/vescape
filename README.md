@@ -209,6 +209,7 @@ PR base is always `dev` (`main` is reserved for production releases).
 - [Alerts](docs/alerts.md)
 - [Ride history](docs/history.md)
 - [Connection state](docs/connectionState.md)
+- [Releases](docs/release.md)
 
 ## License
 

@@ -9,11 +9,11 @@ import {
 describe('release-note bundler', () => {
   test('sorts canonical notes and emits typed deterministic data', () => {
     const output = compileReleaseNotes([
-      { fileName: '0.9.0.md', version: '0.9.0', markdown: '## Fixed\n\n- One\n' },
-      { fileName: '0.10.0.md', version: '0.10.0', markdown: '## New\n\n- Two\n' },
+      { fileName: '0.9.md', version: '0.9', markdown: '## Fixed\n\n- One\n' },
+      { fileName: '0.10.md', version: '0.10', markdown: '## New\n\n- Two\n' },
     ])
 
-    expect(output.indexOf('0.10.0')).toBeLessThan(output.indexOf('0.9.0'))
+    expect(output.indexOf('0.10')).toBeLessThan(output.indexOf('0.9'))
     expect(output).toContain('satisfies readonly BundledReleaseNote[]')
     expect(compileReleaseNotes([])).toContain('export const bundledReleaseNotes = [\n\n]')
   })
@@ -21,11 +21,16 @@ describe('release-note bundler', () => {
   test('rejects malformed, duplicate, and unsupported inputs', () => {
     expect(() =>
       compileReleaseNotes([{ fileName: 'latest.md', version: 'latest', markdown: 'Notes' }]),
-    ).toThrow('marketing version')
+    ).toThrow('release train')
     expect(() =>
       compileReleaseNotes([
-        { fileName: '1.0.0.md', version: '1.0.0', markdown: 'One' },
-        { fileName: 'copy.md', version: '1.0.0', markdown: 'Two' },
+        { fileName: '1.2.3.md', version: '1.2.3', markdown: '## Fixed\n\n- One\n' },
+      ]),
+    ).toThrow('release train')
+    expect(() =>
+      compileReleaseNotes([
+        { fileName: '1.0.md', version: '1.0', markdown: 'One' },
+        { fileName: '1.0.md', version: '1.0', markdown: 'Two' },
       ]),
     ).toThrow('Duplicate')
     expect(() => validateReleaseMarkdown('<script>alert(1)</script>')).toThrow(

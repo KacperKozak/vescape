@@ -55,11 +55,12 @@ symlink; this is verified to compile on device.
   pbxproj plugin.
 - `app.config.ts`: `ios.infoPlist.NSSupportsLiveActivities = true`.
 - `ios.appleTeamId` (via `APPLE_TEAM_ID` env) is **required** — apple-targets needs it to sign the
-  extension. Set it in `.env` / EAS secrets or prebuild warns and device builds fail to sign.
+  extension. Set it in `.env` or the build environment, or prebuild warns and device builds fail
+  to sign.
 - `VescapeCore.podspec` platform is `17.0` (ActivityKit needs 16.1+; the app already ships 17.0, so
   nothing runs below it). This is why no `@available` gating is needed in the ActivityKit code.
 - The `widget` target adds an App Group entitlement by default. It is unused (local `update`s pass
-  `ContentState` directly, no shared storage) but harmless; EAS auto-registers it.
+  `ContentState` directly, no shared storage) but harmless; signing provisioning must cover it.
 
 ### Limits
 

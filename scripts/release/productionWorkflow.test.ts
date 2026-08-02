@@ -23,7 +23,9 @@ describe('production promotion workflow contract', () => {
     expect(validation).toBeLessThan(mutation)
     expect(workflow).toContain('git merge-base --is-ancestor "$SOURCE_SHA" origin/main')
     expect(workflow).toContain('git show "$SOURCE_SHA:package.json"')
-    expect(workflow).toContain('git cat-file -e "$SOURCE_SHA:release-notes/$MARKETING_VERSION.md"')
+    expect(workflow).toContain('IFS=. read -r TRAIN_MAJOR TRAIN_MINOR _ <<< "$MARKETING_VERSION"')
+    expect(workflow).toContain('TRAIN_VERSION="$TRAIN_MAJOR.$TRAIN_MINOR"')
+    expect(workflow).toContain('git cat-file -e "$SOURCE_SHA:release-notes/$TRAIN_VERSION.md"')
     expect(workflow).toContain('promotion-manifest')
   })
 
@@ -56,17 +58,15 @@ describe('production promotion workflow contract', () => {
     expect(workflow).toContain('PRODUCTION_RESULT_PATH: ${{ github.workspace }}/wear-result.json')
   })
 
-  test('creates immutable v tag and canonical GitHub Release after Play success', () => {
+  test('flips existing prerelease to latest after Play success without creating anything', () => {
     expect(workflow).toContain('TAG="v$MARKETING_VERSION"')
     expect(workflow).toContain('test "$(git rev-parse "$TAG^{commit}")" = "$SOURCE_SHA"')
-    expect(workflow).toContain(
-      'gh release create "$TAG" --verify-tag --notes-file "release-notes/$MARKETING_VERSION.md"',
-    )
+    expect(workflow).toContain('gh release edit "$TAG" --prerelease=false --latest')
+    expect(workflow).toContain('echo already-released > github-release-status.txt')
+    expect(workflow).not.toMatch(/git tag|git push|gh release create/)
+    expect(workflow).not.toContain('--json body')
     expect(workflow.indexOf('Apply Wear production operation')).toBeLessThan(
-      workflow.indexOf('Create immutable tag and GitHub Release'),
-    )
-    expect(workflow).toContain(
-      'test "$(cat "release-notes/$MARKETING_VERSION.md")" = "$(gh release view "$TAG" --json body --jq .body)"',
+      workflow.indexOf('Flip existing GitHub prerelease to latest release'),
     )
   })
 

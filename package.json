@@ -1,6 +1,6 @@
 {
   "name": "vescape",
-  "version": "0.84.0",
+  "version": "0.84.1",
   "private": true,
   "license": "GPL-3.0-or-later",
   "author": "Kacper Kozak",
@@ -42,11 +42,7 @@
     "release-notes:check": "bun run scripts/release-notes/generate.ts --check",
     "check": "bun run release-notes:check && bun run ts && bun run lint && bun run format:check && bun run knip && bun run test",
     "check:ci": "bun run release-notes:check && bun run ts && bun run lint && bun run format:check && bun run knip && bun run test:ci",
-    "knip": "knip",
-    "posthog:recent": "bun run scripts/posthog.ts recent",
-    "posthog:events": "bun run scripts/posthog.ts events",
-    "posthog:distinct": "bun run scripts/posthog.ts distinct",
-    "posthog:query": "bun run scripts/posthog.ts query"
+    "knip": "knip"
   },
   "dependencies": {
     "@bacons/apple-targets": "^4.0.7",
