@@ -27,7 +27,7 @@
     "clear": "bun run scripts/clear.ts",
     "copy:shared": "bun run scripts/copy-shared.ts",
     "skills-check": "bun run scripts/skills-check.ts",
-    "screenshot": "bun run scripts/screenshot.ts",
+    "ss": "bun run scripts/screenshot.ts",
     "e2e": "bun run scripts/e2e.ts",
     "screenshots": "bun run scripts/screenshots.ts",
     "perf": "bun run scripts/perf-telemetry.ts",
