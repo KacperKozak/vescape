@@ -8,7 +8,7 @@
  * tunes, alerts) and a Debug Recording replayed at 1x through the real telemetry pipeline.
  *
  *   bun run screenshots               # all 8 panels; picks the device, or asks when several are up
- *   bun run screenshots --panel 4     # one panel, fast iteration
+ *   bun run screenshots --panel 4 --no-build  # one panel against the installed build
  *   bun run screenshots --device R5CT # skip the picker and target this serial
  *
  * The hero panel is captured last, on purpose. `TelemetryPipeline.liveSeries` buckets the sparkline
@@ -17,7 +17,8 @@
  * the samples into a fraction of the window instead of filling it. The replay recording must be at
  * least as long as the whole run.
  */
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { homedir } from 'os'
 import { basename, join } from 'path'
 import { applicationId } from '../src/config/appVariant.ts'
 import { select, SelectCancelled, type SelectOption } from './lib/select.ts'
@@ -30,10 +31,8 @@ const FIXTURE_ZIP = join(ROOT, 'shared', 'fixtures', 'screenshot-db.zip')
 /** Mirrors `screenshotFixtureDir` in `src/config/screenshotMode.ts`. */
 const DEVICE_FIXTURE_DIR = `/storage/emulated/0/Android/data/${applicationId}/files/screenshots`
 
-/** Pinned so output does not depend on whatever AVD the developer happens to have. */
-const AVD_NAME = 'Vescape_Screenshots'
-const AVD_DEVICE = 'pixel_6' // 1080x2400
-const AVD_IMAGE = 'system-images;android-35;google_apis;arm64-v8a'
+/** Play's phone screenshots are cut to this; anything else has to be rescaled by hand. */
+const TARGET_RESOLUTION = '1080x2400'
 
 const DEFAULT_REPLAY = 'replay-thor301'
 /** `AppSettings.liveHistoryLimit` default — the sparkline window the hero panel has to fill. */
@@ -44,7 +43,7 @@ interface Args {
   device: string | null
   replay: string
   sparklineMinutes: number
-  build: boolean
+  noBuild: boolean
   noWait: boolean
 }
 
@@ -54,7 +53,7 @@ function parseArgs(argv: string[]): Args {
     device: null,
     replay: DEFAULT_REPLAY,
     sparklineMinutes: DEFAULT_SPARKLINE_MINUTES,
-    build: false,
+    noBuild: false,
     noWait: false,
   }
   for (let i = 0; i < argv.length; i += 1) {
@@ -69,7 +68,7 @@ function parseArgs(argv: string[]): Args {
     else if (arg === '--device') args.device = next()
     else if (arg === '--replay') args.replay = next()
     else if (arg === '--sparkline-minutes') args.sparklineMinutes = Number(next())
-    else if (arg === '--build') args.build = true
+    else if (arg === '--no-build') args.noBuild = true
     else if (arg === '--no-wait') args.noWait = true
     else throw new Error(`Unknown argument: ${arg}`)
   }
@@ -103,6 +102,17 @@ async function runOrDie(cmd: string[], env?: Record<string, string | undefined>)
 
 // ── device ───────────────────────────────────────────────────────────────────
 
+/**
+ * `emulator` is not on a plain `PATH` unless the developer put it there, so resolve it from the SDK
+ * the way Gradle does. Only the SDK root is consulted — nothing here is machine-specific, and a
+ * missing SDK stays the environment's problem to fix, not the script's to paper over.
+ */
+function emulatorBin(): string {
+  const sdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT
+  const fromSdk = sdk ? join(sdk, 'emulator', 'emulator') : null
+  return fromSdk && existsSync(fromSdk) ? fromSdk : 'emulator'
+}
+
 async function attachedDevices(): Promise<string[]> {
   const out = await capture(['adb', 'devices'])
   return out
@@ -112,36 +122,29 @@ async function attachedDevices(): Promise<string[]> {
     .map((line) => line.split('\t')[0].trim())
 }
 
-async function avdExists(): Promise<boolean> {
-  const out = await capture(['emulator', '-list-avds'])
-  return out.split('\n').some((line) => line.trim() === AVD_NAME)
+async function listAvds(): Promise<string[]> {
+  const out = await capture([emulatorBin(), '-list-avds'])
+  return out
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
 }
 
-async function createAvd(): Promise<void> {
-  console.log(`› Creating AVD ${AVD_NAME} (${AVD_DEVICE}, 1080x2400)…`)
-  const proc = Bun.spawn(
-    ['avdmanager', 'create', 'avd', '-n', AVD_NAME, '-k', AVD_IMAGE, '-d', AVD_DEVICE, '--force'],
-    { stdin: 'pipe', stdout: 'inherit', stderr: 'inherit' },
-  )
-  proc.stdin.write('no\n') // decline the custom hardware profile prompt
-  proc.stdin.end()
-  const code = await proc.exited
-  if (code !== 0) {
-    console.error(
-      `Could not create ${AVD_NAME}. Install the system image first:\n` +
-        `  sdkmanager "${AVD_IMAGE}"`,
-    )
-    process.exit(code ?? 1)
-  }
+/** An AVD's screen size, read from its own config — the store set must be one consistent size. */
+function avdResolution(name: string): string | null {
+  const config = join(homedir(), '.android', 'avd', `${name}.avd`, 'config.ini')
+  if (!existsSync(config)) return null
+  const text = readFileSync(config, 'utf8')
+  const width = /^hw\.lcd\.width=(\d+)$/m.exec(text)?.[1]
+  const height = /^hw\.lcd\.height=(\d+)$/m.exec(text)?.[1]
+  return width && height ? `${width}x${height}` : null
 }
 
-/** Boots the pinned AVD and returns its serial. Reuses an already-running emulator. */
-async function bootAvd(): Promise<string> {
-  if (!(await avdExists())) await createAvd()
-
+/** Boots an existing AVD and returns its serial. */
+async function bootAvd(name: string): Promise<string> {
   const before = await attachedDevices()
-  console.log(`› Booting ${AVD_NAME}…`)
-  Bun.spawn(['emulator', '-avd', AVD_NAME, '-no-boot-anim', '-no-snapshot'], {
+  console.log(`› Booting ${name}…`)
+  Bun.spawn([emulatorBin(), '-avd', name, '-no-boot-anim', '-no-snapshot'], {
     stdout: 'ignore',
     stderr: 'ignore',
   })
@@ -157,7 +160,7 @@ async function bootAvd(): Promise<string> {
     }
     await Bun.sleep(2000)
   }
-  console.error(`${AVD_NAME} did not finish booting within 180s.`)
+  console.error(`${name} did not finish booting within 180s.`)
   process.exit(1)
 }
 
@@ -169,32 +172,54 @@ async function deviceModel(serial: string): Promise<string | null> {
   return model || null
 }
 
-const BOOT_AVD = Symbol('boot-avd')
-
 /** `adb-54151FDAS00077-x5XeY4._adb-tls-connect._tcp` → `54151FDAS00077`. */
 function shortSerial(serial: string): string {
   return serial.replace(/^adb-/, '').replace(/-\w+\._adb-tls-connect\._tcp$/, '')
 }
 
-async function chooseDevice(attached: string[]): Promise<string> {
+type DeviceChoice = { kind: 'serial'; serial: string } | { kind: 'avd'; name: string }
+
+async function chooseDevice(attached: string[]): Promise<DeviceChoice> {
   const models = await Promise.all(attached.map(deviceModel))
-  const options: SelectOption<string | typeof BOOT_AVD>[] = attached.map((serial, index) => ({
+  const options: SelectOption<DeviceChoice>[] = attached.map((serial, index) => ({
     label: models[index] ?? serial,
-    value: serial,
+    value: { kind: 'serial', serial },
     hint: shortSerial(serial),
   }))
-  options.push({ label: `boot ${AVD_NAME}`, value: BOOT_AVD, hint: 'pinned 1080x2400 AVD' })
 
-  const choice = await select('Capture device', options)
-  return choice === BOOT_AVD ? bootAvd() : choice
+  for (const name of await listAvds()) {
+    const resolution = avdResolution(name)
+    options.push({
+      label: `boot ${name}`,
+      value: { kind: 'avd', name },
+      hint: resolution ?? 'AVD',
+    })
+  }
+
+  if (options.length === 1) return options[0].value
+  return select('Capture device', options)
 }
 
 async function resolveDevice(args: Args): Promise<string> {
   if (args.device) return args.device
+
   const attached = await attachedDevices()
-  if (attached.length === 0) return bootAvd()
-  if (attached.length === 1) return attached[0]
-  return chooseDevice(attached)
+  const choice =
+    attached.length === 1
+      ? ({ kind: 'serial', serial: attached[0] } as const)
+      : await chooseDevice(attached)
+
+  const device = choice.kind === 'avd' ? await bootAvd(choice.name) : choice.serial
+  await warnOnResolution(device)
+  return device
+}
+
+/** Play cuts phone screenshots to one size; capturing at another means rescaling by hand later. */
+async function warnOnResolution(device: string): Promise<void> {
+  const size = /(\d+x\d+)/.exec(await capture(['adb', '-s', device, 'shell', 'wm', 'size']))?.[1]
+  if (size && size !== TARGET_RESOLUTION) {
+    console.warn(`  device is ${size}, not the ${TARGET_RESOLUTION} the store set expects`)
+  }
 }
 
 // ── device prep ──────────────────────────────────────────────────────────────
@@ -307,9 +332,19 @@ function selectPanels(args: Args): string[] {
   return [match]
 }
 
-async function runFlow(file: string): Promise<void> {
+async function runFlow(file: string, device: string): Promise<void> {
   console.log(`› ${basename(file, '.yaml')}`)
-  await runOrDie(['maestro', 'test', '-e', `APP_ID=${applicationId}`, join(FLOWS_DIR, file)])
+  // Without --device Maestro picks the first attached device itself, which silently drives whatever
+  // else is plugged in rather than the one this run prepared.
+  await runOrDie([
+    'maestro',
+    'test',
+    '--device',
+    device,
+    '-e',
+    `APP_ID=${applicationId}`,
+    join(FLOWS_DIR, file),
+  ])
 }
 
 async function main(args: Args): Promise<void> {
@@ -318,7 +353,17 @@ async function main(args: Args): Promise<void> {
   const device = await resolveDevice(args)
   console.log(`Device: ${device}`)
 
-  if (args.build || !(await installed(device))) await buildAndInstall(device)
+  // Build by default: `installed()` only sees the package id, so it cannot tell a screenshot build
+  // from an ordinary dev install, and reusing the wrong one produces a run that goes nowhere.
+  if (args.noBuild) {
+    if (!(await installed(device))) {
+      console.error(`${applicationId} is not installed on ${device}; drop --no-build.`)
+      process.exit(1)
+    }
+    console.log('› Reusing the installed build (--no-build) — it must be a screenshot build.')
+  } else {
+    await buildAndInstall(device)
+  }
 
   await pushFixtures(device, args.replay)
   await setChrome(device, true)
@@ -331,8 +376,8 @@ async function main(args: Args): Promise<void> {
     const rest = selected.filter((file) => !file.startsWith('01-'))
 
     const bootedAt = Date.now()
-    await runFlow('_boot.yaml')
-    for (const file of rest) await runFlow(file)
+    await runFlow('_boot.yaml', device)
+    for (const file of rest) await runFlow(file, device)
 
     if (hero.length > 0 && !args.noWait) {
       const remainingMs = args.sparklineMinutes * 60_000 - (Date.now() - bootedAt)
@@ -341,7 +386,7 @@ async function main(args: Args): Promise<void> {
         await Bun.sleep(remainingMs)
       }
     }
-    for (const file of hero) await runFlow(file)
+    for (const file of hero) await runFlow(file, device)
   } finally {
     await setChrome(device, false)
   }

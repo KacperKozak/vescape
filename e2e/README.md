@@ -112,11 +112,16 @@ Iterate on one panel:
 bun run screenshots --panel 4
 ```
 
-With nothing attached the runner boots the pinned `Vescape_Screenshots` AVD; with several devices
-up it shows an arrow-key picker (↑/↓ or j/k, Enter, Esc to cancel). `--device <serial>` skips it.
+The runner shows an arrow-key picker (↑/↓ or j/k, Enter, Esc to cancel) listing attached devices
+and existing AVDs with their resolutions; it warns when the chosen one is not 1080x2400, the size
+Play cuts phone screenshots to. `--device <serial>` skips the picker.
 
-Other flags: `--build` (force a rebuild), `--replay <name>` (default `replay-thor301`),
-`--no-wait` (skip the sparkline wait).
+It builds the screenshot build every run by default, because the installed package id alone cannot
+distinguish one from an ordinary dev install and capturing against the wrong build produces a run
+that goes nowhere. Pass `--no-build` to reuse what is installed once you have a screenshot build on
+the device.
+
+Other flags: `--replay <name>` (default `replay-thor301`), `--no-wait` (skip the sparkline wait).
 
 The hero panel is captured last. `TelemetryPipeline.liveSeries` buckets the sparkline over
 `liveHistoryLimit` minutes of receipt timestamps, so a full sparkline needs that much wall clock at
