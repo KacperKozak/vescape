@@ -153,6 +153,7 @@ async function capturePlatform(platform: CapturePlatform, args: Args): Promise<v
   }
 
   await driver.stageFixtures()
+  await driver.pinLocation()
   await driver.setChrome(true)
 
   try {

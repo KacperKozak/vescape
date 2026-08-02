@@ -13,6 +13,7 @@ import { basename, join } from 'path'
 import { applicationId } from '../../src/config/appVariant.ts'
 import {
   capture,
+  CAPTURE_LOCATION,
   FIXTURE_ZIP,
   runOrDie,
   screenshotBuildEnv,
@@ -165,6 +166,11 @@ export async function createIosDriver(
       }
 
       await simctl('privacy', sim.udid, 'grant', 'location-always', applicationId)
+    },
+
+    async pinLocation() {
+      const { latitude, longitude } = CAPTURE_LOCATION
+      await simctl('location', sim.udid, 'set', `${latitude},${longitude}`)
     },
 
     async setChrome(clean: boolean) {

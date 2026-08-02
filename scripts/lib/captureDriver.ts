@@ -15,6 +15,15 @@ export type CapturePlatform = 'android' | 'ios'
 export const ROOT = join(import.meta.dir, '..', '..')
 export const FIXTURE_ZIP = join(ROOT, 'shared', 'fixtures', 'screenshot-db.zip')
 
+/**
+ * Where the capture run pretends to be: Wrocław old town.
+ *
+ * The replay recording is BLE-only — 774 `ble-chunk` frames and not one GPS fix — so the map
+ * position comes entirely from the device. Left alone, iOS sits on the simulator default (San
+ * Francisco) and the emulator on its own, and the two store sets stop being comparable.
+ */
+export const CAPTURE_LOCATION = { latitude: 51.1079, longitude: 17.0385 }
+
 export interface CaptureDriver {
   readonly platform: CapturePlatform
   /** Repo-relative output dir, handed to the flows as `OUT_DIR` for `takeScreenshot`. */
@@ -29,6 +38,8 @@ export interface CaptureDriver {
   requireInstalled(): Promise<void>
   /** Clears app data and stages the fixture zip where the app's bootstrap reads it. */
   stageFixtures(): Promise<void>
+  /** Pins the device to `CAPTURE_LOCATION` so both sets share one map backdrop. */
+  pinLocation(): Promise<void>
   /** Pins (`clean`) or restores the status bar and any other run chrome. */
   setChrome(clean: boolean): Promise<void>
 }

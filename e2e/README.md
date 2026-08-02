@@ -99,6 +99,12 @@ same on-screen controls a rider taps (`weather-exit`, `legal-limits-exit`, `hist
 for overlay view states. Anything genuinely platform-specific lives in `scripts/lib/androidCapture.ts`
 and `scripts/lib/iosCapture.ts` behind the `CaptureDriver` contract, not in a second flow set.
 
+Both runs pin the device to Wrocław old town (`CAPTURE_LOCATION`): `xcrun simctl location set` on
+iOS, `adb emu geo fix` on an Android emulator. The replay recording is BLE-only and carries no GPS
+fix, so without this the map backdrop is whatever default each platform boots with and the two sets
+stop being comparable. A physical Android device keeps its own location — mocking it would mean
+installing a provider app.
+
 iOS captures on an **iPhone 17 Pro Max simulator** (1320x2868, the 6.9" size App Store Connect
 requires; Apple downscales to the rest). A physical device is not an option — `simctl status_bar`,
 which pins the clock, battery and signal for the whole run, has no device equivalent. The fixture
