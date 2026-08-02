@@ -55,7 +55,12 @@ jobs:
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      - run: bun run check:ci
+      - run: bun run release-notes:check
+      - run: bun run ts
+      - run: bun run lint
+      - run: bun run format:check
+      - run: bun run knip
+      - run: bun run test:bun
 
   build:
     name: Build signed IPA and upload to TestFlight
