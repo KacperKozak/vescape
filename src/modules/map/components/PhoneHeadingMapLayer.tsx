@@ -26,10 +26,19 @@ interface PhoneHeadingMapLayerProps {
   onStatusChange: (status: PhoneHeadingStatus | 'idle') => void
 }
 
+/**
+ * The cone's on-screen angle is the heading minus the camera bearing. While the camera follows the
+ * heading those two are the same number, but they reach the map by different routes — the bearing
+ * through `setCameraDirect`, the icon through a shape update — and land a frame apart, so a
+ * continuously moving heading leaves the cone wobbling a few degrees around the puck. Following
+ * means the answer is a constant: pin the icon to the viewport pointing up and the skew cannot
+ * show. Only a camera that is not tracking the heading needs the map-space bearing.
+ */
 function phoneHeadingShape(
   coordinate: PhoneHeadingMapLayerProps['coordinate'],
   headingDeg: number | null,
   approximateFix: boolean,
+  followCamera: boolean,
 ): GeoJSON.FeatureCollection {
   return {
     type: 'FeatureCollection',
@@ -42,7 +51,7 @@ function phoneHeadingShape(
                 type: 'Point',
                 coordinates: [coordinate.longitude, coordinate.latitude],
               },
-              properties: { bearing: headingDeg },
+              properties: { bearing: followCamera ? 0 : headingDeg },
             },
           ]
         : [],
@@ -71,7 +80,9 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
     followCameraRef.current = followCamera
     sourceRef.current?.setNativeProps({
       id: 'center-phone-heading-source',
-      shape: JSON.stringify(phoneHeadingShape(coordinate, headingDegRef.current, approximateFix)),
+      shape: JSON.stringify(
+        phoneHeadingShape(coordinate, headingDegRef.current, approximateFix, followCamera),
+      ),
     })
   }, [approximateFix, coordinate, followCamera])
 
@@ -82,7 +93,7 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
       onStatusChange('idle')
       sourceRef.current?.setNativeProps({
         id: 'center-phone-heading-source',
-        shape: JSON.stringify(phoneHeadingShape(null, null, false)),
+        shape: JSON.stringify(phoneHeadingShape(null, null, false, false)),
       })
       return
     }
@@ -100,7 +111,12 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
       sourceRef.current?.setNativeProps({
         id: 'center-phone-heading-source',
         shape: JSON.stringify(
-          phoneHeadingShape(coordinateRef.current, headingDeg, approximateFixRef.current),
+          phoneHeadingShape(
+            coordinateRef.current,
+            headingDeg,
+            approximateFixRef.current,
+            followCameraRef.current,
+          ),
         ),
       })
 
@@ -127,7 +143,7 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
       <ShapeSource
         ref={sourceRef}
         id="center-phone-heading-source"
-        shape={phoneHeadingShape(coordinate, headingDegRef.current, approximateFix)}
+        shape={phoneHeadingShape(coordinate, headingDegRef.current, approximateFix, followCamera)}
       >
         <SymbolLayer
           id="center-phone-heading-outline"
@@ -136,7 +152,7 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
             iconRotate: ['get', 'bearing'],
             iconAllowOverlap: true,
             iconIgnorePlacement: true,
-            iconRotationAlignment: 'map',
+            iconRotationAlignment: followCamera ? 'viewport' : 'map',
             iconSize: 0.95,
             iconOffset: [0, -10],
             iconColor: theme.palette.mono.white,
