@@ -538,8 +538,10 @@ enum TelemetryDatabase {
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_34_35`
     migrator.registerMigration("v35_telemetry_board_id") { db in
       try mintOrphanBoards(db)
+      try buildDeviceBoardMap(db)
       try rebuildFramesOnBoardId(db)
       try rebuildBucketsOnBoardId(db)
+      try db.execute(sql: "DROP TABLE IF EXISTS \(DEVICE_BOARD_MAP)")
     }
 
     // Sync Cursors for the six remaining mutable tables (#281). `board_warnings` also gains the
@@ -680,17 +682,57 @@ internal func mintOrphanBoards(_ db: Database) throws {
   )
 }
 
-/// Resolves a telemetry row's `device_id` to a Board id: the linked Board when one still claims the
-/// identifier, otherwise the tombstone minted for it. A row that never carried an identifier stays
-/// unattributed — `unattributed` is NULL for frames and the sentinel for buckets, whose column is
-/// part of the primary key.
+/// Scratch table holding the board-id migration's one and only BLE identifier → Board decision.
+/// Temp, so it belongs to the connection and never reaches the durable schema.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `DEVICE_BOARD_MAP`
+private let DEVICE_BOARD_MAP = "telemetry_device_board_map"
+
+/// One BLE identifier can be claimed by more than one Board — the same peripheral linked twice,
+/// which the app supports and a Rider produces by pairing a board they already own a second time.
+/// Telemetry predating this migration recorded only the identifier, so for such rows there is no
+/// evidence of which of those Boards was connected, and no rule can recover it.
+///
+/// What must not happen is the two rebuilds disagreeing. Resolved independently, each
+/// `SELECT … LIMIT 1` is free to return a different Board for the same identifier, and then the
+/// frames of a ride sit under one Board while its buckets sit under another: History lists the ride
+/// from the buckets and finds no frames for it, so stats render over an empty route.
+///
+/// So the choice is made exactly once, here, and both rebuilds read it. `MIN(b.id)` is an arbitrary
+/// but stable pick among the claimants — arbitrary because the information to do better does not
+/// exist, stable because re-running the migration reaches the same answer. Deliberately not left
+/// unattributed: an unowned row is never uploaded and is pruned on age, so "unknown" would quietly
+/// destroy the history a merely mis-labelled ride keeps intact.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `buildDeviceBoardMap`
+internal func buildDeviceBoardMap(_ db: Database) throws {
+  try db.execute(sql: """
+    CREATE TEMP TABLE \(DEVICE_BOARD_MAP) (
+      device_id TEXT PRIMARY KEY NOT NULL,
+      board_id TEXT NOT NULL
+    )
+    """)
+  try db.execute(sql: """
+    INSERT INTO \(DEVICE_BOARD_MAP) (device_id, board_id)
+    SELECT b.ble_id, MIN(b.id)
+    FROM boards b
+    WHERE b.ble_id IS NOT NULL AND b.ble_id != ''
+    GROUP BY b.ble_id
+    """)
+}
+
+/// Resolves a telemetry row's `device_id` to a Board id: the Board `buildDeviceBoardMap` chose for
+/// the identifier, otherwise the tombstone minted for it. A row that never carried an identifier
+/// stays unattributed — `unattributed` is NULL for frames and the sentinel for buckets, whose
+/// column is part of the primary key.
+///
+/// The lookup hits a primary key holding one row per identifier, so unlike a scan over `boards` it
+/// cannot resolve the same identifier two ways in two statements.
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `boardIdFromDeviceId`
 private func boardIdFromDeviceId(_ alias: String, unattributed: String) -> String {
   """
   CASE
     WHEN \(alias).device_id IS NULL OR \(alias).device_id = '' THEN \(unattributed)
     ELSE COALESCE(
-      (SELECT b.id FROM boards b WHERE b.ble_id = \(alias).device_id LIMIT 1),
+      (SELECT m.board_id FROM \(DEVICE_BOARD_MAP) m WHERE m.device_id = \(alias).device_id),
       '\(ORPHAN_BOARD_ID_PREFIX)' || \(alias).device_id
     )
   END
@@ -825,9 +867,10 @@ private func rebuildBucketsOnBoardId(_ db: Database) throws {
     """)
   // Grouped rather than copied row-for-row so the rebuild is total. A `board_id` collision on the
   // new key needs two identifiers resolving to one Board inside one minute, which the resolver
-  // cannot currently produce — but an ungrouped copy would abort the whole migration on a
-  // constraint error if it ever did, stranding the database mid-upgrade. The fold sums the additive
-  // lanes and takes the extreme of the peaks, as an upsert merge would.
+  // cannot produce — the map is keyed on the identifier and a Board carries one — but an ungrouped
+  // copy would abort the whole migration on a constraint error if it ever did, stranding the
+  // database mid-upgrade. The fold sums the additive lanes and takes the extreme of the peaks, as
+  // an upsert merge would.
   try db.execute(sql: """
     INSERT INTO telemetry_minute_buckets_new (board_id, \(columns))
     SELECT

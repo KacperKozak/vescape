@@ -238,6 +238,27 @@ final class TelemetryMigrationTests: XCTestCase {
     }
   }
 
+  /// Two Boards may claim one `ble_id` — the same peripheral linked twice, which the app supports
+  /// and a Rider produces by pairing a board they already own a second time. Telemetry from before
+  /// this migration recorded only the identifier, so which of them was connected is unknowable and
+  /// the pick is arbitrary. What is not arbitrary is that frames and buckets make the *same* pick:
+  /// split across the two Boards, History lists the ride from its buckets, finds no frames under
+  /// that Board, and renders stats over an empty route.
+  func testADuplicatedIdentifierSendsFramesAndBucketsToTheSameBoard() throws {
+    try migrate(upTo: Self.beforeBoardId)
+    try insertBoard(id: "board-b", name: "Jeżdżąca Martwica", bleId: "ble-dup")
+    try insertBoard(id: "board-a", name: "ADV2", bleId: "ble-dup")
+    try insertLegacyFrame(deviceId: "ble-dup", deviceName: "ADV2", capturedAtMs: 60_000)
+    try insertLegacyBucket(deviceId: "ble-dup", deviceName: "ADV2", bucketStartMs: 60_000)
+
+    try migrate()
+
+    let frameBoard = try boardIds()
+    XCTAssertEqual(frameBoard, try boardIds(fromFrames: false), "the ride's frames and buckets split")
+    XCTAssertEqual(frameBoard, ["board-a"], "the pick is arbitrary but must be stable")
+    XCTAssertNotNil(try board("board-b"), "the losing claimant is still a Board the Rider owns")
+  }
+
   /// A frame that never carried an identifier stays unattributed rather than joining a random
   /// Board; the bucket column is part of the primary key, so it takes the sentinel instead.
   func testTelemetryWithNoIdentifierStaysUnattributed() throws {

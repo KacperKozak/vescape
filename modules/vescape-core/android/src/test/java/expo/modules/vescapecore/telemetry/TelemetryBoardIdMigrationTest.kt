@@ -79,10 +79,49 @@ class TelemetryBoardIdMigrationTest {
     for (match in listOf("INSERT INTO telemetry_frames_new", "INSERT INTO telemetry_minute_buckets_new")) {
       val sql = statement(match)
       assertTrue(
-        "$match does not resolve device_id through boards.ble_id",
-        sql.contains("SELECT b.id FROM boards b WHERE b.ble_id ="),
+        "$match does not resolve device_id through the shared identifier map",
+        sql.contains("SELECT m.board_id FROM telemetry_device_board_map m WHERE m.device_id ="),
       )
     }
+  }
+
+  /**
+   * Two Boards may claim one `ble_id` — the same peripheral linked twice, which the app supports.
+   * Resolved independently, the two rebuilds are each free to pick a different claimant, and a ride
+   * whose buckets say one Board and whose frames say another renders in History as stats over an
+   * empty route. Neither rebuild may reach `boards` directly; both read one decision.
+   */
+  @Test
+  fun aDuplicatedIdentifierIsResolvedOnceSoTheTwoRebuildsCannotDiverge() {
+    val sql = migrationSql()
+    val map = sql.indexOfFirst { it.startsWith("INSERT INTO telemetry_device_board_map") }
+    val firstRebuild = sql.indexOfFirst { it.contains("INSERT INTO telemetry_frames_new") }
+
+    assertTrue("the identifier is never resolved into a shared decision", map >= 0)
+    assertTrue("the map is filled after the rebuilds have already read it", map < firstRebuild)
+    assertTrue(
+      "claimants are not folded to one deterministic pick per identifier",
+      sql[map].contains("MIN(b.id)") && sql[map].contains("GROUP BY b.ble_id"),
+    )
+    for (match in listOf("INSERT INTO telemetry_frames_new", "INSERT INTO telemetry_minute_buckets_new")) {
+      assertFalse(
+        "$match still resolves the identifier against boards, so it can pick its own claimant",
+        statement(match).contains("FROM boards"),
+      )
+    }
+  }
+
+  /** A tombstone minted for an unresolved identifier carries no `ble_id`, so it never enters the map. */
+  @Test
+  fun theIdentifierMapIsBuiltAfterTheOrphanMintAndDroppedAfterTheRebuilds() {
+    val sql = migrationSql()
+    val mint = sql.indexOfFirst { it.startsWith("INSERT OR IGNORE INTO boards") }
+    val map = sql.indexOfFirst { it.startsWith("CREATE TEMP TABLE telemetry_device_board_map") }
+    val dropped = sql.indexOfFirst { it.contains("DROP TABLE IF EXISTS telemetry_device_board_map") }
+    val lastRebuild = sql.indexOfLast { it.contains("INSERT INTO telemetry_minute_buckets_new") }
+
+    assertTrue("the map is built before the mint, so minted Boards are missing from it", mint < map)
+    assertTrue("the scratch map outlives the migration", dropped > lastRebuild)
   }
 
   /** A row that never carried an identifier stays unattributed rather than joining a random Board. */
