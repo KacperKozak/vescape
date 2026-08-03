@@ -218,7 +218,10 @@ jobs:
 
   upload_wear:
     name: Upload Wear internal
-    needs: build
+    # Serialized after the phone upload: Play allows one active edit per app,
+    # so parallel uploads delete each other's edit.
+    needs: [build, upload_phone]
+    if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
