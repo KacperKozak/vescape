@@ -6,7 +6,7 @@
  */
 import { existsSync, readFileSync } from 'fs'
 import { homedir } from 'os'
-import { basename, join } from 'path'
+import { basename, dirname, join } from 'path'
 
 import { applicationId } from '../../src/config/appVariant.ts'
 import {
@@ -229,11 +229,29 @@ export async function createAndroidDriver(
 
       if (existsSync(FIXTURE_ZIP)) {
         await adb('push', FIXTURE_ZIP, `${DEVICE_FIXTURE_DIR}/${basename(FIXTURE_ZIP)}`)
+        // `pm clear` deleted the external files dir, so the push is what recreates it — owned by
+        // `shell:ext_data_rw`, mode `rwxrws---`. The app is neither owner nor in that group and
+        // cannot traverse its own directory, so `restoreDatabase` fails with EACCES and the run
+        // silently captures an empty app. Reopening both levels is what makes the push readable.
+        await adb('shell', 'chmod', '777', DEVICE_FIXTURE_DIR, dirname(DEVICE_FIXTURE_DIR))
       } else {
         warnMissingFixture()
       }
 
-      for (const permission of ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION']) {
+      // Every runtime permission the app asks for, granted up front. Two reasons, both fatal:
+      // BLUETOOTH_CONNECT gates the foreground service even for a replay session
+      // (`CoreForegroundServiceLauncher`), so without it `startDebugReplay` is skipped and the run
+      // captures an app with no telemetry. And any permission left ungranted raises a system dialog
+      // over the first screen — it takes window focus, so the pending `startForegroundService()`
+      // misses its deadline and the app dies with ForegroundServiceDidNotStartInTimeException.
+      for (const permission of [
+        'ACCESS_FINE_LOCATION',
+        'ACCESS_COARSE_LOCATION',
+        'BLUETOOTH_CONNECT',
+        'BLUETOOTH_SCAN',
+        'ACTIVITY_RECOGNITION',
+        'POST_NOTIFICATIONS',
+      ]) {
         await adb('shell', 'pm', 'grant', applicationId, `android.permission.${permission}`)
       }
     },
