@@ -621,6 +621,7 @@ class TelemetryRepository private constructor(context: Context) {
       batteryUsedWhMilli = summary.batteryUsedWhMilli,
     )
     dao.insertFavorite(favorite)
+    SyncCoordinator.get(appContext).notifyRiderEdit()
     favorite.toMap(boardId?.let { boardNamesById()[it] })
   }
 
@@ -657,6 +658,7 @@ class TelemetryRepository private constructor(context: Context) {
       batteryUsedWhMilli = summary.batteryUsedWhMilli,
     )
     if (dao.updateFavorite(updated) == 0) return@withContext null
+    SyncCoordinator.get(appContext).notifyRiderEdit()
     updated.toMap(updated.boardId?.let { boardNamesById()[it] })
   }
 
@@ -667,7 +669,10 @@ class TelemetryRepository private constructor(context: Context) {
    */
   suspend fun deleteFavorite(id: String): Boolean = withContext(Dispatchers.IO) {
     val deleted = dao.deleteFavorite(id) > 0
-    if (deleted) favoriteMediaStore.deleteDirectory(id)
+    if (deleted) {
+      favoriteMediaStore.deleteDirectory(id)
+      SyncCoordinator.get(appContext).notifyRiderEdit()
+    }
     deleted
   }
 

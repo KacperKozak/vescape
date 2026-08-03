@@ -2,6 +2,7 @@ package expo.modules.vescapecore.sync
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import android.util.Log
 import expo.modules.vescapecore.api.HttpMethod
@@ -76,6 +77,37 @@ class SyncCoordinator private constructor(private val context: Context) {
   /** Serializes passes against each other and against [resetForAccount]. */
   private val passLock = Mutex()
 
+  /**
+   * Last reachability the callback below reported, so a kick fires on the transition rather than on
+   * every capability change a network publishes while it is already up.
+   *
+   * Starts true: a phone that has been online all along must not read its first callback as a
+   * regain, which would kick on nothing.
+   */
+  @Volatile private var online = true
+
+  /**
+   * Connectivity regained is one of the immediate kicks, next to the ride ending and sign-in. Without
+   * it a phone that comes back online waits out the idle interval with a full backlog in hand.
+   *
+   * Registered for the process lifetime, not per pass: the callback is what makes the regain
+   * observable at all, and [kick] is a no-op whenever the switch is off or the loop is not running.
+   *
+   * @parity /modules/vescape-core/ios/sync/SyncCoordinator.swift `pathUpdateHandler`
+   */
+  private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+    override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+      val reachable = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+      val regained = reachable && !online
+      online = reachable
+      if (regained) kick()
+    }
+
+    override fun onLost(network: Network) {
+      online = false
+    }
+  }
+
   private val store = SyncStore(
     database = { dao },
     generation = { generation },
@@ -87,6 +119,13 @@ class SyncCoordinator private constructor(private val context: Context) {
     transport = ::post,
     environment = ::environment,
   )
+
+  init {
+    runCatching {
+      context.getSystemService(ConnectivityManager::class.java)
+        ?.registerDefaultNetworkCallback(networkCallback)
+    }
+  }
 
   val pauseReason: SyncPauseReason? get() = engine.pauseReason
 
@@ -102,6 +141,33 @@ class SyncCoordinator private constructor(private val context: Context) {
   /** Recording persisted samples: the ride cadence follows sample production, not session presence. */
   fun notifySamplesPersisted(atMs: Long = System.currentTimeMillis()) {
     lastSamplePersistedAtMs = atMs
+  }
+
+  /**
+   * The ride ended and its last samples are on disk. Called after the final flush, so the kick scans
+   * a complete ride rather than one missing its tail.
+   *
+   * This is the moment with the largest fresh backlog and the moment a Rider is most likely to open
+   * the app and look at the status line, which is why it does not wait for the next tick.
+   *
+   * @parity /modules/vescape-core/ios/sync/SyncCoordinator.swift `notifyRecordingStopped`
+   */
+  fun notifyRecordingStopped() {
+    kick()
+  }
+
+  /**
+   * A Rider changed something durable and small — a Favorite pinned, renamed or unpinned. One row,
+   * created by hand, and the Rider is looking at the screen that says whether it is backed up, so a
+   * five-minute wait reads as the backup not working.
+   *
+   * Deliberately not wired to telemetry writes: those arrive at 2 Hz and already have the ride
+   * cadence. This is for edits a Rider makes, which are rare and individually visible.
+   *
+   * @parity /modules/vescape-core/ios/sync/SyncCoordinator.swift `notifyRiderEdit`
+   */
+  fun notifyRiderEdit() {
+    kick()
   }
 
   /**

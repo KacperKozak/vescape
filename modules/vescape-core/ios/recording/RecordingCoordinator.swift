@@ -71,7 +71,7 @@ internal final class RecordingCoordinator {
     if let config = activeConfig, enabled {
       recordMarker(markerType, config: config)
     }
-    store.flushBlocking()
+    flushTelemetryBlocking()
     activeConfig = nil
     enabled = false
     startedAtMs = nil
@@ -79,7 +79,7 @@ internal final class RecordingCoordinator {
 
   func failSession() {
     finishDebugRecording(status: "error")
-    store.flushBlocking()
+    flushTelemetryBlocking()
     activeConfig = nil
     enabled = false
     startedAtMs = nil
@@ -99,7 +99,7 @@ internal final class RecordingCoordinator {
     if enabled {
       recordMarker("app_stop", config: config, message: "Recording stopped")
     }
-    store.flushBlocking()
+    flushTelemetryBlocking()
     enabled = false
     startedAtMs = nil
     return true
@@ -130,6 +130,15 @@ internal final class RecordingCoordinator {
       altitudeM: location.altitudeM,
       timestamp: location.timestamp
     )
+  }
+
+  /// The three ways recording stops — the session finishing, failing, or the Rider switching it
+  /// off. The flush has to land before the kick, or the uploader scans a ride missing its tail.
+  ///
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/recording/RecordingCoordinator.kt `flushTelemetryBlocking`
+  private func flushTelemetryBlocking() {
+    store.flushBlocking()
+    SyncCoordinator.shared.notifyRecordingStopped()
   }
 
   private func finishDebugRecording(status: String) {

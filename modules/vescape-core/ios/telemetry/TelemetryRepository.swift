@@ -285,6 +285,7 @@ internal final class TelemetryRepository {
       summary: summary
     )
     guard FavoriteStore.shared.insert(favorite) else { return nil }
+    SyncCoordinator.shared.notifyRiderEdit()
     return favorite.toMap(boardName: favorite.boardId.flatMap { Self.boardNamesById()[$0] })
   }
 
@@ -359,6 +360,7 @@ internal final class TelemetryRepository {
       summary: Self.favoriteSummary(points, config: config)
     )
     guard let stored = FavoriteStore.shared.update(updated) else { return nil }
+    SyncCoordinator.shared.notifyRiderEdit()
     return stored.toMap(boardName: stored.boardId.flatMap { Self.boardNamesById()[$0] })
   }
 
@@ -366,7 +368,10 @@ internal final class TelemetryRepository {
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `deleteFavorite`
   func deleteFavorite(_ id: String) -> Bool {
     let deleted = FavoriteStore.shared.delete(id)
-    if deleted { FavoriteMediaStore.shared.deleteDirectory(favoriteId: id) }
+    if deleted {
+      FavoriteMediaStore.shared.deleteDirectory(favoriteId: id)
+      SyncCoordinator.shared.notifyRiderEdit()
+    }
     return deleted
   }
 

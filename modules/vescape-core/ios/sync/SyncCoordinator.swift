@@ -115,6 +115,29 @@ final class SyncCoordinator {
     lock.unlock()
   }
 
+  /// The ride ended and its last samples are on disk. Called after the final flush, so the kick
+  /// scans a complete ride rather than one missing its tail.
+  ///
+  /// This is the moment with the largest fresh backlog and the moment a Rider is most likely to open
+  /// the app and look at the status line, which is why it does not wait for the next tick.
+  ///
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/sync/SyncCoordinator.kt `notifyRecordingStopped`
+  func notifyRecordingStopped() {
+    kick()
+  }
+
+  /// A Rider changed something durable and small — a Favorite pinned, renamed or unpinned. One row,
+  /// created by hand, and the Rider is looking at the screen that says whether it is backed up, so a
+  /// five-minute wait reads as the backup not working.
+  ///
+  /// Deliberately not wired to telemetry writes: those arrive at 2 Hz and already have the ride
+  /// cadence. This is for edits a Rider makes, which are rare and individually visible.
+  ///
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/sync/SyncCoordinator.kt `notifyRiderEdit`
+  func notifyRiderEdit() {
+    kick()
+  }
+
   /// The master switch, from the App Setting native owns. Off stops the loop outright — no scan, no
   /// request, no backoff, no pause notification — rather than leaving a loop that decides to do
   /// nothing every five minutes.
