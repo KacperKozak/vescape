@@ -79,14 +79,13 @@ internal final class TelemetryRepository {
     }
   }
 
-  func recordMarker(type: String, deviceId: String?, deviceName: String?, message: String? = nil) {
+  func recordMarker(type: String, boardId: String?, message: String? = nil) {
     queue.async {
       self.pendingMarkers.append([
         "occurredAtMs": telemetryNowMs(),
         "elapsedRealtimeMs": telemetryElapsedMs(),
         "type": type,
-        "deviceId": deviceId,
-        "deviceName": deviceName,
+        "boardId": boardId,
         "message": message,
         "gapMs": nil,
       ])
@@ -128,7 +127,6 @@ internal final class TelemetryRepository {
     let limit = min(500, max(1, telemetryInt(options["limit"]) ?? DEFAULT_HISTORY_LIMIT))
     let boardId = options["boardId"] as? String
     guard let pool else { return [] }
-    let deviceId = Self.bleId(forBoardId: boardId)
     let boardNames = Self.boardNamesById()
     return (try? pool.read { db in
       let rows = try Row.fetchAll(
@@ -146,8 +144,8 @@ internal final class TelemetryRepository {
       let markerTo = (rows.map { $0["bucket_start_ms"] as Int64 }.max() ?? toMs) + TELEMETRY_BUCKET_SIZE_MS
       let markers = try Row.fetchAll(
         db,
-        sql: "SELECT * FROM telemetry_markers WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND (? IS NULL OR device_id = ?) ORDER BY occurred_at_ms ASC",
-        arguments: [markerFrom, markerTo, deviceId, deviceId]
+        sql: "SELECT * FROM telemetry_markers WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND (? IS NULL OR board_id = ?) ORDER BY occurred_at_ms ASC",
+        arguments: [markerFrom, markerTo, boardId, boardId]
       )
       return rows.map { historyMap($0, markers: markers, boardNames: boardNames) }
     }) ?? []
@@ -441,7 +439,6 @@ internal final class TelemetryRepository {
     let fromMs = telemetryLong(options["fromMs"]) ?? 0
     let toMs = telemetryLong(options["toMs"]) ?? 0
     let boardId = options["boardId"] as? String
-    let deviceId = Self.bleId(forBoardId: boardId)
     guard toMs >= fromMs else { return 0 }
     let deletable = subtractProtectedTelemetryRanges(
       deleteRange: TelemetryTimeRange(startMs: fromMs, endMs: toMs),
@@ -458,7 +455,7 @@ internal final class TelemetryRepository {
         try db.execute(sql: "DELETE FROM telemetry_frames WHERE captured_at_ms >= ? AND captured_at_ms <= ? AND ((? IS NOT NULL AND board_id = ?) OR (? IS NULL AND board_id IS NULL))", arguments: [range.startMs, range.endMs, boardId, boardId, boardId])
         try db.execute(sql: "DELETE FROM telemetry_minute_buckets WHERE last_sample_at_ms >= ? AND first_sample_at_ms <= ? AND board_id = ?", arguments: [range.startMs, range.endMs, boardId ?? UNKNOWN_TELEMETRY_BOARD_ID])
         try db.execute(sql: "DELETE FROM metric_exclusion_ranges WHERE end_ms >= ? AND start_ms <= ?", arguments: [range.startMs, range.endMs])
-        try db.execute(sql: "DELETE FROM telemetry_markers WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND ((? IS NOT NULL AND device_id = ?) OR (? IS NULL AND device_id IS NULL))", arguments: [range.startMs, range.endMs, deviceId, deviceId, deviceId])
+        try db.execute(sql: "DELETE FROM telemetry_markers WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND ((? IS NOT NULL AND board_id = ?) OR (? IS NULL AND board_id IS NULL))", arguments: [range.startMs, range.endMs, boardId, boardId, boardId])
       }
       return count
     }) ?? 0
@@ -611,8 +608,7 @@ internal final class TelemetryRepository {
       "occurredAtMs": capture.capturedAtMs,
       "elapsedRealtimeMs": capture.elapsedRealtimeMs,
       "type": type,
-      "deviceId": capture.deviceId,
-      "deviceName": capture.deviceName,
+      "boardId": capture.boardId,
       "message": nil,
       "gapMs": gapMs,
     ]
@@ -637,8 +633,7 @@ internal final class TelemetryRepository {
     let elapsed = telemetryElapsedMs()
     let operation = properties["operation"] as? String
     let phase = properties["phase"] as? String
-    let deviceId = properties["ble_id"] as? String
-    let deviceName = properties["board_nickname"] as? String
+    let boardId = properties["board_id"] as? String
     let message = properties["message"] as? String
     let propertiesJson = Self.encodeDiagnosticProperties(properties)
     queue.async {
@@ -646,10 +641,10 @@ internal final class TelemetryRepository {
         try db.execute(
           sql: """
             INSERT INTO diagnostic_events
-              (occurred_at_ms, elapsed_realtime_ms, event_name, operation, phase, device_id, device_name, message, properties_json)
+              (occurred_at_ms, elapsed_realtime_ms, event_name, operation, phase, board_id, message, properties_json)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-          arguments: [occurredAtMs, elapsed, eventName, operation, phase, deviceId, deviceName, message, propertiesJson]
+          arguments: [occurredAtMs, elapsed, eventName, operation, phase, boardId, message, propertiesJson]
         )
       }
     }
@@ -659,18 +654,18 @@ internal final class TelemetryRepository {
     guard let pool else { return [] }
     let fromMs = telemetryLong(options["fromMs"]) ?? 0
     let toMs = telemetryLong(options["toMs"]) ?? telemetryNowMs()
-    let deviceId = options["deviceId"] as? String
+    let boardId = options["boardId"] as? String
     let limit = min(1_000, max(1, telemetryInt(options["limit"]) ?? 200))
     return (try? pool.read { db in
       try Row.fetchAll(
         db,
         sql: """
           SELECT * FROM diagnostic_events
-          WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND (? IS NULL OR device_id = ?)
+          WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND (? IS NULL OR board_id = ?)
           ORDER BY occurred_at_ms DESC
           LIMIT ?
           """,
-        arguments: [fromMs, toMs, deviceId, deviceId, limit]
+        arguments: [fromMs, toMs, boardId, boardId, limit]
       ).map { row in
         [
           "id": row["id"] as Int64,
@@ -678,8 +673,7 @@ internal final class TelemetryRepository {
           "eventName": row["event_name"] as String,
           "operation": row["operation"] as String?,
           "phase": row["phase"] as String?,
-          "deviceId": row["device_id"] as String?,
-          "deviceName": row["device_name"] as String?,
+          "boardId": row["board_id"] as String?,
           "message": row["message"] as String?,
           "propertiesJson": row["properties_json"] as String,
         ]

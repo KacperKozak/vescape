@@ -38,8 +38,7 @@ internal final class ProfileStatsRepository {
     return computeProfileStatsForBuckets(
       buckets: buckets,
       markers: markersForBuckets(buckets),
-      month: nil,
-      bleIdByBoardId: bleIdByBoardId()
+      month: nil
     )
   }
 
@@ -51,8 +50,7 @@ internal final class ProfileStatsRepository {
     return computeProfileStatsForBuckets(
       buckets: buckets,
       markers: markersForBuckets(buckets),
-      month: ProfileStatsMonth(year: year, month: month),
-      bleIdByBoardId: bleIdByBoardId()
+      month: ProfileStatsMonth(year: year, month: month)
     )
   }
 
@@ -60,22 +58,11 @@ internal final class ProfileStatsRepository {
     let buckets = allBuckets()
     return computeProfileStatMonthsForBuckets(
       buckets: buckets,
-      markers: markersForBuckets(buckets),
-      bleIdByBoardId: bleIdByBoardId()
+      markers: markersForBuckets(buckets)
     )
       .map { ["year": $0.year, "month": $0.month] }
   }
 
-  /// Buckets key on the Board (ADR 0028); markers still key on the BLE identifier. Session
-  /// boundary detection compares the two, so it needs the translation.
-  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/ProfileStatsRepository.kt `bleIdByBoardId`
-  private func bleIdByBoardId() -> [String: String] {
-    guard let pool else { return [:] }
-    return (try? pool.read { db in
-      try Row.fetchAll(db, sql: "SELECT id, ble_id FROM boards WHERE ble_id IS NOT NULL")
-        .reduce(into: [String: String]()) { $0[$1["id"] as String] = $1["ble_id"] as String }
-    }) ?? [:]
-  }
 
   private func allBuckets() -> [Row] {
     guard let pool else { return [] }
@@ -102,10 +89,9 @@ internal func computeProfileStatsForBuckets(
   buckets: [Row],
   markers: [Row],
   month: ProfileStatsMonth?,
-  calendar: Calendar = .current,
-  bleIdByBoardId: [String: String] = [:]
+  calendar: Calendar = .current
 ) -> [String: Any?] {
-  let sessions = groupProfileSessions(buckets: buckets, markers: markers, bleIdByBoardId: bleIdByBoardId)
+  let sessions = groupProfileSessions(buckets: buckets, markers: markers)
     .filter { $0.avgSpeedSampleCount > 0 }
   let included = month.map { target in
     sessions.filter { profileMonth($0.startAtMs, calendar: calendar) == target }
@@ -142,10 +128,9 @@ internal func computeProfileStatsForBuckets(
 internal func computeProfileStatMonthsForBuckets(
   buckets: [Row],
   markers: [Row],
-  calendar: Calendar = .current,
-  bleIdByBoardId: [String: String] = [:]
+  calendar: Calendar = .current
 ) -> [ProfileStatsMonth] {
-  Array(Set(groupProfileSessions(buckets: buckets, markers: markers, bleIdByBoardId: bleIdByBoardId)
+  Array(Set(groupProfileSessions(buckets: buckets, markers: markers)
     .filter { $0.avgSpeedSampleCount > 0 }
     .map { profileMonth($0.startAtMs, calendar: calendar) }))
     .sorted {
@@ -153,13 +138,9 @@ internal func computeProfileStatMonthsForBuckets(
     }
 }
 
-/// [bleIdByBoardId] translates the Board a bucket is keyed on into the BLE identifier its markers
-/// are keyed on (ADR 0028), which is what session boundary detection compares.
-/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/ProfileStatsRepository.kt `groupProfileSessions`
 internal func groupProfileSessions(
   buckets: [Row],
-  markers: [Row],
-  bleIdByBoardId: [String: String] = [:]
+  markers: [Row]
 ) -> [ProfileSessionAggregate] {
   guard !buckets.isEmpty else { return [] }
   var sessions: [ProfileSessionAggregate] = []
@@ -168,7 +149,7 @@ internal func groupProfileSessions(
 
   for bucket in buckets.sorted(by: { ($0["first_sample_at_ms"] as Int64) < ($1["first_sample_at_ms"] as Int64) }) {
     if (bucket["sample_count"] as Int) <= 0 { continue }
-    let boundary = markerBoundaryForProfileBucket(bucket, markers: markers, bleIdByBoardId: bleIdByBoardId)
+    let boundary = markerBoundaryForProfileBucket(bucket, markers: markers)
     let boardId = bucket["board_id"] as String
     let breakByBoard = current == nil || current?.boardId != boardId
     let breakByGap = previous.map { (bucket["first_sample_at_ms"] as Int64) - ($0["last_sample_at_ms"] as Int64) > PROFILE_SESSION_GAP_MS } ?? false
@@ -203,17 +184,12 @@ internal func groupProfileSessions(
   return sessions
 }
 
-internal func markerBoundaryForProfileBucket(
-  _ bucket: Row,
-  markers: [Row],
-  bleIdByBoardId: [String: String] = [:]
-) -> String? {
-  let bucketDevice = bleIdByBoardId[bucket["board_id"] as String] ?? ""
-  return markers.last { marker in
+internal func markerBoundaryForProfileBucket(_ bucket: Row, markers: [Row]) -> String? {
+  markers.last { marker in
     let occurred = marker["occurred_at_ms"] as Int64
     return occurred >= (bucket["first_sample_at_ms"] as Int64) - 5_000 &&
       occurred <= (bucket["first_sample_at_ms"] as Int64) + 1_000 &&
-      (marker["device_id"] as String? ?? "") == bucketDevice
+      (marker["board_id"] as String? ?? "") == (bucket["board_id"] as String)
   }.map { $0["type"] as String }
 }
 

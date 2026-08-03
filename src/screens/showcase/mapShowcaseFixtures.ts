@@ -144,8 +144,7 @@ export const FIXTURE_RIDE_MARKERS: HistoryMarker[] = MARKER_TYPES.map((type, ind
   occurredAtMs:
     FIXTURE_RIDE_GPS_SAMPLES[(2 + index * 2) % FIXTURE_RIDE_GPS_SAMPLES.length].capturedAtMs,
   type,
-  deviceId: 'fixture-board',
-  deviceName: 'Fixture Board',
+  boardId: 'fixture-board',
   message: type === 'error' ? 'Fixture fault for preview' : null,
   gapMs: type === 'gap' ? 15_000 : null,
 }))

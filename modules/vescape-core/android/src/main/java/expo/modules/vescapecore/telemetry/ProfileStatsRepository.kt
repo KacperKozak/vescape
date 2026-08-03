@@ -20,7 +20,6 @@ class ProfileStatsRepository private constructor(context: Context) {
       buckets = buckets,
       markers = markers,
       month = null,
-      bleIdByBoardId = bleIdByBoardId(),
     )
   }
 
@@ -37,14 +36,13 @@ class ProfileStatsRepository private constructor(context: Context) {
       buckets = buckets,
       markers = markers,
       month = ProfileStatsMonth(year = year, month = month),
-      bleIdByBoardId = bleIdByBoardId(),
     )
   }
 
   suspend fun getProfileStatMonths(): List<Map<String, Any?>> {
     val buckets = dao.getAllHistoryBucketsAsc()
     val markers = markersForBuckets(buckets)
-    return computeProfileStatMonthsForBuckets(buckets, markers, bleIdByBoardId = bleIdByBoardId()).map { month ->
+    return computeProfileStatMonthsForBuckets(buckets, markers).map { month ->
       mapOf("year" to month.year, "month" to month.month)
     }
   }
@@ -55,15 +53,8 @@ class ProfileStatsRepository private constructor(context: Context) {
     if (buckets.isEmpty()) return emptyList()
     val fromMs = buckets.minOf { it.firstSampleAtMs } - PROFILE_SESSION_GAP_MS
     val toMs = buckets.maxOf { it.lastSampleAtMs } + TELEMETRY_BUCKET_SIZE_MS
-    return dao.getMarkers(fromMs = fromMs, toMs = toMs, deviceId = null)
+    return dao.getMarkers(fromMs = fromMs, toMs = toMs, boardId = null)
   }
-
-  /**
-   * Buckets key on the Board (ADR 0028); markers still key on the BLE identifier. Session boundary
-   * detection compares the two, so it needs the translation.
-   */
-  private suspend fun bleIdByBoardId(): Map<String, String> =
-    dao.getBoards().mapNotNull { board -> board.bleId?.let { board.id to it } }.toMap()
 
   companion object {
     @Volatile
@@ -103,9 +94,8 @@ internal fun computeProfileStatsForBuckets(
   markers: List<TelemetryMarkerEntity>,
   month: ProfileStatsMonth?,
   zoneId: ZoneId = ZoneId.systemDefault(),
-  bleIdByBoardId: Map<String, String> = emptyMap(),
 ): Map<String, Any?> {
-  val sessions = groupProfileSessions(buckets, markers, bleIdByBoardId).filter { it.avgSpeedSampleCount > 0 }
+  val sessions = groupProfileSessions(buckets, markers).filter { it.avgSpeedSampleCount > 0 }
   val included = if (month == null) {
     sessions
   } else {
@@ -154,9 +144,8 @@ internal fun computeProfileStatMonthsForBuckets(
   buckets: List<TelemetryMinuteBucketEntity>,
   markers: List<TelemetryMarkerEntity>,
   zoneId: ZoneId = ZoneId.systemDefault(),
-  bleIdByBoardId: Map<String, String> = emptyMap(),
 ): List<ProfileStatsMonth> {
-  return groupProfileSessions(buckets, markers, bleIdByBoardId)
+  return groupProfileSessions(buckets, markers)
     .filter { it.avgSpeedSampleCount > 0 }
     .map { profileMonth(it.startAtMs, zoneId) }
     .distinct()
@@ -166,7 +155,6 @@ internal fun computeProfileStatMonthsForBuckets(
 private fun groupProfileSessions(
   buckets: List<TelemetryMinuteBucketEntity>,
   markers: List<TelemetryMarkerEntity>,
-  bleIdByBoardId: Map<String, String>,
 ): List<ProfileSessionAggregate> {
   if (buckets.isEmpty()) return emptyList()
   val sorted = buckets.sortedBy { it.firstSampleAtMs }
@@ -176,7 +164,7 @@ private fun groupProfileSessions(
 
   for (bucket in sorted) {
     if (bucket.sampleCount <= 0) continue
-    val boundaryBefore = markerBoundaryForBucket(bucket, markers, bleIdByBoardId)
+    val boundaryBefore = markerBoundaryForBucket(bucket, markers)
     val breakByBoard = current == null || current.boardId != bucket.boardId
     val breakByGap = previous != null && bucket.firstSampleAtMs - previous.lastSampleAtMs > PROFILE_SESSION_GAP_MS
     val breakByBoundary = boundaryBefore != null && PROFILE_BREAK_BOUNDARIES.contains(boundaryBefore)
@@ -210,13 +198,11 @@ private fun groupProfileSessions(
 private fun markerBoundaryForBucket(
   bucket: TelemetryMinuteBucketEntity,
   markers: List<TelemetryMarkerEntity>,
-  bleIdByBoardId: Map<String, String>,
 ): String? {
-  val bucketDeviceId = bleIdByBoardId[bucket.boardId] ?: UNKNOWN_TELEMETRY_DEVICE_ID
   val marker = markers.lastOrNull { marker ->
     marker.occurredAtMs >= bucket.firstSampleAtMs - 5_000L &&
       marker.occurredAtMs <= bucket.firstSampleAtMs + 1_000L &&
-      (marker.deviceId ?: UNKNOWN_TELEMETRY_DEVICE_ID) == bucketDeviceId
+      (marker.boardId ?: UNKNOWN_TELEMETRY_BOARD_ID) == bucket.boardId
   }
   return marker?.type
 }

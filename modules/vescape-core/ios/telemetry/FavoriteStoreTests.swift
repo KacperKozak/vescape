@@ -302,7 +302,6 @@ final class FavoriteStoreTests: XCTestCase {
       return BucketTelemetryPoint(
         capturedAtMs: startMs + offset,
         boardId: "board-1",
-        deviceId: "board-1",
         speedCentiKmh: speedCentiKmh,
         batteryVoltageMv: 50_000,
         motorCurrentMa: 10_000,

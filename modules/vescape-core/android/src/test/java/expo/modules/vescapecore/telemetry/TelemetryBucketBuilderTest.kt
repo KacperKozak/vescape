@@ -12,7 +12,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 125_000L,
           boardId = "board-1",
-          deviceId = "board-1",
           speedCentiKmh = -1_200,
           batteryVoltageMv = 77_500,
           motorCurrentMa = -2_500,
@@ -24,7 +23,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 130_000L,
           boardId = "board-1",
-          deviceId = "board-1",
           speedCentiKmh = 1_600,
           batteryVoltageMv = 77_100,
           motorCurrentMa = 3_500,
@@ -99,7 +97,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 10_000L,
           boardId = "a",
-          deviceId = "a",
           speedCentiKmh = 100,
           batteryVoltageMv = 70_000,
           motorCurrentMa = 0,
@@ -111,7 +108,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 70_000L,
           boardId = "a",
-          deviceId = "a",
           speedCentiKmh = 200,
           batteryVoltageMv = 70_000,
           motorCurrentMa = 0,
@@ -123,7 +119,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 10_000L,
           boardId = "b",
-          deviceId = "b",
           speedCentiKmh = 300,
           batteryVoltageMv = 70_000,
           motorCurrentMa = 0,
@@ -148,7 +143,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 0L,
           boardId = "board-1",
-          deviceId = "board-1",
           speedCentiKmh = 499,
           batteryVoltageMv = 70_000,
           motorCurrentMa = 0,
@@ -161,7 +155,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 1_000L,
           boardId = "board-1",
-          deviceId = "board-1",
           speedCentiKmh = -500,
           batteryVoltageMv = 70_000,
           motorCurrentMa = 0,
@@ -174,7 +167,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 2_000L,
           boardId = "board-1",
-          deviceId = "board-1",
           speedCentiKmh = 1_200,
           batteryVoltageMv = 70_000,
           motorCurrentMa = 0,
@@ -202,7 +194,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 0L,
           boardId = "board-1",
-          deviceId = "board-1",
           speedCentiKmh = 100,
           batteryVoltageMv = 70_000,
           motorCurrentMa = 0,
@@ -228,7 +219,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 0L,
           boardId = "board-1",
-          deviceId = "board-1",
           speedCentiKmh = 0,
           batteryVoltageMv = 50_000,
           motorCurrentMa = 0,
@@ -240,7 +230,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 3_600L,
           boardId = "board-1",
-          deviceId = "board-1",
           speedCentiKmh = 0,
           batteryVoltageMv = 50_000,
           motorCurrentMa = 0,
@@ -252,7 +241,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 7_200L,
           boardId = "board-1",
-          deviceId = "board-1",
           speedCentiKmh = 0,
           batteryVoltageMv = 50_000,
           motorCurrentMa = 0,
@@ -276,7 +264,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 0L,
           boardId = "board-1",
-          deviceId = "board-1",
           speedCentiKmh = 5000,
           batteryVoltageMv = 70_000,
           motorCurrentMa = 0,
@@ -290,7 +277,6 @@ class TelemetryBucketBuilderTest {
         BucketTelemetryPoint(
           capturedAtMs = 1_000L,
           boardId = "board-1",
-          deviceId = "board-1",
           speedCentiKmh = 2000,
           batteryVoltageMv = 70_000,
           motorCurrentMa = 0,

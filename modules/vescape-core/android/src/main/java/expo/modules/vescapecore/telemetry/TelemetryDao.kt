@@ -19,11 +19,11 @@ interface TelemetryDao {
     SELECT * FROM metric_exclusion_ranges
     WHERE start_ms <= :toMs
       AND end_ms >= :fromMs
-      AND (:deviceId IS NULL OR device_id = :deviceId)
+      AND (:boardId IS NULL OR board_id = :boardId)
     ORDER BY start_ms ASC
     """,
   )
-  suspend fun getExclusions(fromMs: Long, toMs: Long, deviceId: String?): List<MetricExclusionRangeEntity>
+  suspend fun getExclusions(fromMs: Long, toMs: Long, boardId: String?): List<MetricExclusionRangeEntity>
 
   @Query("DELETE FROM metric_exclusion_ranges WHERE start_ms <= :toMs AND end_ms >= :fromMs")
   suspend fun deleteExclusionsRange(fromMs: Long, toMs: Long): Int
@@ -37,7 +37,7 @@ interface TelemetryDao {
   @Query(
     """
     SELECT * FROM metric_exclusion_ranges
-    WHERE device_id = :deviceId
+    WHERE board_id = :boardId
       AND reason = :reason
       AND end_ms >= :startMs - :mergeGapMs
     ORDER BY end_ms DESC
@@ -45,7 +45,7 @@ interface TelemetryDao {
     """,
   )
   suspend fun getMergeableExclusionRange(
-    deviceId: String,
+    boardId: String,
     reason: String,
     startMs: Long,
     mergeGapMs: Long,
@@ -426,9 +426,9 @@ interface TelemetryDao {
 
   @Transaction
   suspend fun upsertExclusionRanges(exclusions: List<MetricExclusionRangeEntity>) {
-    for (exclusion in exclusions.sortedWith(compareBy({ it.deviceId }, { it.reason }, { it.startMs }))) {
+    for (exclusion in exclusions.sortedWith(compareBy({ it.boardId }, { it.reason }, { it.startMs }))) {
       val existing = getMergeableExclusionRange(
-        exclusion.deviceId,
+        exclusion.boardId,
         exclusion.reason,
         exclusion.startMs,
         METRIC_EXCLUSION_RANGE_MERGE_GAP_MS,
@@ -474,18 +474,18 @@ interface TelemetryDao {
     SELECT * FROM telemetry_markers
     WHERE occurred_at_ms >= :fromMs
       AND occurred_at_ms <= :toMs
-      AND (:deviceId IS NULL OR device_id = :deviceId)
+      AND (:boardId IS NULL OR board_id = :boardId)
     ORDER BY occurred_at_ms ASC
     """,
   )
-  suspend fun getMarkers(fromMs: Long, toMs: Long, deviceId: String?): List<TelemetryMarkerEntity>
+  suspend fun getMarkers(fromMs: Long, toMs: Long, boardId: String?): List<TelemetryMarkerEntity>
 
   @Query(
     """
     SELECT * FROM diagnostic_events
     WHERE occurred_at_ms >= :fromMs
       AND occurred_at_ms <= :toMs
-      AND (:deviceId IS NULL OR device_id = :deviceId)
+      AND (:boardId IS NULL OR board_id = :boardId)
     ORDER BY occurred_at_ms DESC
     LIMIT :limit
     """,
@@ -493,7 +493,7 @@ interface TelemetryDao {
   suspend fun getDiagnosticEvents(
     fromMs: Long,
     toMs: Long,
-    deviceId: String?,
+    boardId: String?,
     limit: Int,
   ): List<DiagnosticEventEntity>
 
@@ -605,12 +605,12 @@ interface TelemetryDao {
     WHERE occurred_at_ms >= :fromMs
       AND occurred_at_ms <= :toMs
       AND (
-        (:deviceId IS NOT NULL AND device_id = :deviceId)
-        OR (:deviceId IS NULL AND device_id IS NULL)
+        (:boardId IS NOT NULL AND board_id = :boardId)
+        OR (:boardId IS NULL AND board_id IS NULL)
       )
     """,
   )
-  suspend fun deleteMarkersRange(fromMs: Long, toMs: Long, deviceId: String?): Int
+  suspend fun deleteMarkersRange(fromMs: Long, toMs: Long, boardId: String?): Int
 
   @Query(
     """
@@ -622,14 +622,11 @@ interface TelemetryDao {
   )
   suspend fun deleteBucketsRange(fromMs: Long, toMs: Long, bucketBoardId: String): Int
 
-  /**
-   * [deviceId] is the BLE identifier the Board carried; markers still key on it (ADR 0028), while
-   * frames and buckets key on [boardId]. Null on either side means "every device".
-   */
+  /** Every telemetry table keys on [boardId] (ADR 0028). Null means "every Board". */
   @Transaction
-  suspend fun deleteRange(fromMs: Long, toMs: Long, boardId: String?, deviceId: String?): Int {
+  suspend fun deleteRange(fromMs: Long, toMs: Long, boardId: String?): Int {
     val frames = deleteFramesRange(fromMs, toMs, boardId)
-    deleteMarkersRange(fromMs, toMs, deviceId)
+    deleteMarkersRange(fromMs, toMs, boardId)
     deleteBucketsRange(fromMs, toMs, boardId ?: UNKNOWN_TELEMETRY_BOARD_ID)
     deleteExclusionsRange(fromMs, toMs)
     return frames

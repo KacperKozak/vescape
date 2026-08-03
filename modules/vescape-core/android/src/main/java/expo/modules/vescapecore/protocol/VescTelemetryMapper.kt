@@ -11,8 +11,6 @@ internal fun RefloatTelemetry.toCapture(session: SessionConfig, canId: Int?): Te
         capturedAtMs = lastPacketAt,
         elapsedRealtimeMs = SystemClock.elapsedRealtime(),
         boardId = session.appBoardId,
-        deviceId = session.deviceId,
-        deviceName = session.deviceName,
         canId = canId,
         hasFault = hasFault,
         faultCode = faultCode,

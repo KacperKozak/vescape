@@ -259,6 +259,87 @@ final class TelemetryMigrationTests: XCTestCase {
     XCTAssertNotNil(try board("board-b"), "the losing claimant is still a Board the Rider owns")
   }
 
+  /// ADR-0028 left Markers, Diagnostic Events and Metric Exclusion Ranges on `device_id` because
+  /// "that is what crosses the wire for them" — circular, and it kept a second copy of the defect
+  /// the Board move existed to remove. All three resolve through the same one decision, so a
+  /// duplicated identifier cannot scatter a ride's Markers across the Boards claiming it.
+  func testMarkersEventsAndRangesMoveOntoTheSameBoardAsTheirTelemetry() throws {
+    try migrate(upTo: Self.beforeBoardId)
+    try insertBoard(id: "board-b", name: "Jeżdżąca Martwica", bleId: "ble-dup")
+    try insertBoard(id: "board-a", name: "ADV2", bleId: "ble-dup")
+    try insertLegacyBucket(deviceId: "ble-dup", deviceName: "ADV2", bucketStartMs: 60_000)
+    try queue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO telemetry_markers
+            (occurred_at_ms, elapsed_realtime_ms, type, device_id, device_name, message, gap_ms)
+          VALUES (60000, 0, 'gap', 'ble-dup', 'ADV2', NULL, 4000)
+          """
+      )
+      try db.execute(
+        sql: """
+          INSERT INTO diagnostic_events
+            (occurred_at_ms, elapsed_realtime_ms, event_name, operation, phase, device_id,
+             device_name, message, properties_json)
+          VALUES (60000, 0, 'ble_connect', 'connect', 'start', 'ble-dup', 'ADV2', NULL, '{}')
+          """
+      )
+      try db.execute(
+        sql: """
+          INSERT INTO metric_exclusion_ranges (device_id, reason, start_ms, end_ms, sample_count)
+          VALUES ('ble-dup', 'free-spin', 60000, 60500, 3)
+          """
+      )
+    }
+
+    try migrate()
+
+    let bucketBoard = try boardIds(fromFrames: false).first ?? nil
+    for table in ["telemetry_markers", "diagnostic_events", "metric_exclusion_ranges"] {
+      let owners = try queue.read { db in
+        try Row.fetchAll(db, sql: "SELECT board_id FROM \(table)").map { $0["board_id"] as String? }
+      }
+      XCTAssertEqual(owners, [bucketBoard], "\(table) resolved the identifier its own way")
+      let columns = try columnNames(table)
+      XCTAssertFalse(columns.contains("device_id"), "\(table) kept device_id")
+      XCTAssertFalse(columns.contains("device_name"), "\(table) kept device_name")
+    }
+  }
+
+  /// A Marker can be written with no Board connected, so its column stays nullable. A Range has no
+  /// meaning without a Board, so its NOT NULL column takes the sentinel a bucket takes.
+  func testAMarkerWithNoIdentifierStaysUnattributedAndARangeTakesTheSentinel() throws {
+    try migrate(upTo: Self.beforeBoardId)
+    try queue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO telemetry_markers
+            (occurred_at_ms, elapsed_realtime_ms, type, device_id, device_name, message, gap_ms)
+          VALUES (60000, 0, 'gap', NULL, NULL, NULL, NULL)
+          """
+      )
+      try db.execute(
+        sql: """
+          INSERT INTO metric_exclusion_ranges (device_id, reason, start_ms, end_ms, sample_count)
+          VALUES ('', 'free-spin', 60000, 60500, 3)
+          """
+      )
+    }
+
+    try migrate()
+
+    XCTAssertEqual(
+      try queue.read { db in try String.fetchOne(db, sql: "SELECT board_id FROM telemetry_markers") },
+      nil
+    )
+    XCTAssertEqual(
+      try queue.read { db in
+        try String.fetchOne(db, sql: "SELECT board_id FROM metric_exclusion_ranges")
+      },
+      ""
+    )
+  }
+
   /// A frame that never carried an identifier stays unattributed rather than joining a random
   /// Board; the bucket column is part of the primary key, so it takes the sentinel instead.
   func testTelemetryWithNoIdentifierStaysUnattributed() throws {

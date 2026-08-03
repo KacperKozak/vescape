@@ -146,7 +146,7 @@ class TelemetryBoardIdMigrationTest {
    */
   @Test
   fun unresolvedIdentifiersMintATombstonedBoardNamedFromTheHistoricalDeviceName() {
-    for (table in listOf("telemetry_frames", "telemetry_minute_buckets")) {
+    for (table in listOf("telemetry_frames", "telemetry_minute_buckets", "telemetry_markers", "diagnostic_events")) {
       val sql = migrationSql().firstOrNull {
         it.startsWith("INSERT OR IGNORE INTO boards") && it.contains("FROM $table t")
       } ?: throw AssertionError("no orphan mint sourced from $table")
@@ -279,15 +279,44 @@ class TelemetryBoardIdMigrationTest {
   // MARK: Untouched tables
 
   /**
-   * Markers, diagnostic events and Metric Exclusion Ranges keep both columns: that is what crosses
-   * the wire for them, and they are low-cardinality display rows rather than a per-sample cost.
+   * ADR 0028 left Markers, Diagnostic Events and Metric Exclusion Ranges on `device_id` because
+   * that was what crossed the wire for them — circular, and it kept a second copy of the very
+   * defect the Board move existed to remove: a BLE address can be claimed by two Boards, so rows
+   * keyed on it cannot say which Board owns them. All three move with the rest.
    */
   @Test
-  fun markersDiagnosticEventsAndExclusionRangesAreNotTouched() {
-    val sql = migrationSql().joinToString("\n")
-
+  fun markersDiagnosticEventsAndExclusionRangesMoveOntoBoardIdToo() {
     for (table in listOf("telemetry_markers", "diagnostic_events", "metric_exclusion_ranges")) {
-      assertFalse("the migration rewrites $table", sql.contains(table))
+      val create = statement("CREATE TABLE ${table}_new")
+      val copy = statement("INSERT INTO ${table}_new")
+
+      assertFalse("$table keeps device_id", create.contains("device_id"))
+      assertFalse("$table keeps device_name", create.contains("device_name"))
+      assertTrue("$table has no board_id", create.contains("board_id"))
+      assertTrue(
+        "$table does not resolve its identifier through the shared map",
+        copy.contains("SELECT m.board_id FROM telemetry_device_board_map m WHERE m.device_id ="),
+      )
+      assertTrue(
+        "the rebuilt $table is not swapped in",
+        migrationSql().contains("ALTER TABLE ${table}_new RENAME TO $table"),
+      )
     }
+  }
+
+  /**
+   * A Marker can be written with no Board connected, so its column stays nullable. A Range excludes
+   * one Board's samples and its column is NOT NULL, so it takes the same sentinel a bucket does.
+   */
+  @Test
+  fun markersWithoutABoardStayNullAndRangesTakeTheUnknownSentinel() {
+    assertTrue(
+      "markers without a device_id do not backfill to NULL",
+      statement("INSERT INTO telemetry_markers_new").contains("device_id = '' THEN NULL"),
+    )
+    assertTrue(
+      "ranges without a device_id do not backfill to the unknown sentinel",
+      statement("INSERT INTO metric_exclusion_ranges_new").contains("device_id = '' THEN ''"),
+    )
   }
 }

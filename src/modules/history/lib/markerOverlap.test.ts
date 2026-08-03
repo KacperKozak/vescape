@@ -21,7 +21,7 @@ function makeGps(id: number, capturedAtMs: number, lat: number, lng: number): Hi
 }
 
 function makeMarker(id: number, occurredAtMs: number, type: HistoryMarker['type']): HistoryMarker {
-  return { id, occurredAtMs, type, deviceId: null, deviceName: null, message: null, gapMs: null }
+  return { id, occurredAtMs, type, boardId: null, message: null, gapMs: null }
 }
 
 describe('resolveMarkerRenderData', () => {

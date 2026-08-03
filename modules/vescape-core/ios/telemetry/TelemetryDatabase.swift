@@ -541,6 +541,9 @@ enum TelemetryDatabase {
       try buildDeviceBoardMap(db)
       try rebuildFramesOnBoardId(db)
       try rebuildBucketsOnBoardId(db)
+      try rebuildMarkersOnBoardId(db)
+      try rebuildDiagnosticEventsOnBoardId(db)
+      try rebuildExclusionRangesOnBoardId(db)
       try db.execute(sql: "DROP TABLE IF EXISTS \(DEVICE_BOARD_MAP)")
     }
 
@@ -631,23 +634,22 @@ internal let ORPHAN_BOARD_ID_PREFIX = "orphan-"
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `mintOrphanBoards`
 internal func mintOrphanBoards(_ db: Database) throws {
   let now = telemetryNowMs()
-  for (table, timeColumn) in [
-    ("telemetry_frames", "captured_at_ms"),
-    ("telemetry_minute_buckets", "bucket_start_ms"),
-  ] {
+  for (table, timeColumn) in telemetryTablesKeyedOnDeviceId {
+    // Metric Exclusion Ranges never carried a `device_name`, so there is nothing to name a Board
+    // after there — a range on an identifier no other table saw falls back to the generic name.
+    let historicalName =
+      table == "metric_exclusion_ranges"
+        ? "NULL"
+        : """
+          (SELECT n.device_name FROM \(table) n WHERE n.device_id = t.device_id \
+          AND n.device_name IS NOT NULL ORDER BY n.\(timeColumn) DESC LIMIT 1)
+          """
     try db.execute(
       sql: """
         INSERT OR IGNORE INTO boards (id, name, ble_id, created_at, updated_at, sync_seq, deleted_at)
         SELECT
           ? || t.device_id,
-          COALESCE(
-            (
-              SELECT n.device_name FROM \(table) n
-              WHERE n.device_id = t.device_id AND n.device_name IS NOT NULL
-              ORDER BY n.\(timeColumn) DESC LIMIT 1
-            ),
-            ?
-          ),
+          COALESCE(\(historicalName), ?),
           NULL,
           MIN(t.\(timeColumn)),
           ?,
@@ -681,6 +683,19 @@ internal func mintOrphanBoards(_ db: Database) throws {
     arguments: [syncSeqBoards]
   )
 }
+
+/// Every table the board-id migration moves off the BLE identifier, with the time column its rows
+/// are ordered by. All five are minted for and rebuilt together: a Board minted from one table's
+/// identifiers has to exist before any other table resolves the same identifier, or the two
+/// disagree about who owns the history — the defect this migration exists to remove.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `TELEMETRY_TABLES_KEYED_ON_DEVICE_ID`
+private let telemetryTablesKeyedOnDeviceId = [
+  ("telemetry_frames", "captured_at_ms"),
+  ("telemetry_minute_buckets", "bucket_start_ms"),
+  ("telemetry_markers", "occurred_at_ms"),
+  ("diagnostic_events", "occurred_at_ms"),
+  ("metric_exclusion_ranges", "start_ms"),
+]
 
 /// Scratch table holding the board-id migration's one and only BLE identifier → Board decision.
 /// Temp, so it belongs to the connection and never reaches the durable schema.
@@ -921,4 +936,104 @@ private func rebuildBucketsOnBoardId(_ db: Database) throws {
     CREATE INDEX IF NOT EXISTS index_telemetry_minute_buckets_sync_seq
     ON telemetry_minute_buckets(sync_seq)
     """)
+}
+
+/// A Marker notes something that happened while recording — a gap, a resume. It belongs to the
+/// Board it happened on, and `board_id` stays nullable because a Marker can be written with no
+/// Board connected. `device_name` goes with the identifier: the Board holds that text once.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `rebuildMarkersOnBoardId`
+private func rebuildMarkersOnBoardId(_ db: Database) throws {
+  try db.execute(sql: "DROP INDEX IF EXISTS index_telemetry_markers_occurred_at_ms")
+  try db.execute(sql: "DROP INDEX IF EXISTS index_telemetry_markers_device_id_occurred_at_ms")
+  try db.execute(sql: """
+    CREATE TABLE telemetry_markers_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      occurred_at_ms INTEGER NOT NULL,
+      elapsed_realtime_ms INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      board_id TEXT,
+      message TEXT,
+      gap_ms INTEGER
+    )
+    """)
+  try db.execute(sql: """
+    INSERT INTO telemetry_markers_new
+      (id, occurred_at_ms, elapsed_realtime_ms, type, board_id, message, gap_ms)
+    SELECT
+      m.id, m.occurred_at_ms, m.elapsed_realtime_ms, m.type,
+      \(boardIdFromDeviceId("m", unattributed: "NULL")),
+      m.message, m.gap_ms
+    FROM telemetry_markers m
+    """)
+  try db.execute(sql: "DROP TABLE telemetry_markers")
+  try db.execute(sql: "ALTER TABLE telemetry_markers_new RENAME TO telemetry_markers")
+  try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_telemetry_markers_occurred_at_ms ON telemetry_markers(occurred_at_ms)")
+  try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_telemetry_markers_board_id_occurred_at_ms ON telemetry_markers(board_id, occurred_at_ms)")
+}
+
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `rebuildDiagnosticEventsOnBoardId`
+private func rebuildDiagnosticEventsOnBoardId(_ db: Database) throws {
+  try db.execute(sql: "DROP INDEX IF EXISTS index_diagnostic_events_occurred_at_ms")
+  try db.execute(sql: "DROP INDEX IF EXISTS index_diagnostic_events_event_name")
+  try db.execute(sql: "DROP INDEX IF EXISTS index_diagnostic_events_device_id_occurred_at_ms")
+  try db.execute(sql: """
+    CREATE TABLE diagnostic_events_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      occurred_at_ms INTEGER NOT NULL,
+      elapsed_realtime_ms INTEGER NOT NULL,
+      event_name TEXT NOT NULL,
+      operation TEXT,
+      phase TEXT,
+      board_id TEXT,
+      message TEXT,
+      properties_json TEXT NOT NULL
+    )
+    """)
+  try db.execute(sql: """
+    INSERT INTO diagnostic_events_new
+      (id, occurred_at_ms, elapsed_realtime_ms, event_name, operation, phase, board_id,
+       message, properties_json)
+    SELECT
+      e.id, e.occurred_at_ms, e.elapsed_realtime_ms, e.event_name, e.operation, e.phase,
+      \(boardIdFromDeviceId("e", unattributed: "NULL")),
+      e.message, e.properties_json
+    FROM diagnostic_events e
+    """)
+  try db.execute(sql: "DROP TABLE diagnostic_events")
+  try db.execute(sql: "ALTER TABLE diagnostic_events_new RENAME TO diagnostic_events")
+  try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_diagnostic_events_occurred_at_ms ON diagnostic_events(occurred_at_ms)")
+  try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_diagnostic_events_event_name ON diagnostic_events(event_name)")
+  try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_diagnostic_events_board_id_occurred_at_ms ON diagnostic_events(board_id, occurred_at_ms)")
+}
+
+/// A Metric Exclusion Range is a span of *one Board's* samples the app decided not to count, so
+/// unlike a Marker it has no meaning without one: `board_id` is NOT NULL, as `device_id` was. A row
+/// that never named a device takes the same unattributed sentinel a bucket does — the column is NOT
+/// NULL on both, so one sentinel across the two keeps "no Board" a single idea.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `rebuildExclusionRangesOnBoardId`
+private func rebuildExclusionRangesOnBoardId(_ db: Database) throws {
+  try db.execute(sql: "DROP INDEX IF EXISTS index_metric_exclusion_ranges_start_ms_end_ms")
+  try db.execute(sql: "DROP INDEX IF EXISTS index_metric_exclusion_ranges_device_id_start_ms_end_ms")
+  try db.execute(sql: """
+    CREATE TABLE metric_exclusion_ranges_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      board_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      start_ms INTEGER NOT NULL,
+      end_ms INTEGER NOT NULL,
+      sample_count INTEGER NOT NULL
+    )
+    """)
+  try db.execute(sql: """
+    INSERT INTO metric_exclusion_ranges_new
+      (id, board_id, reason, start_ms, end_ms, sample_count)
+    SELECT
+      r.id, \(boardIdFromDeviceId("r", unattributed: "''")), r.reason, r.start_ms, r.end_ms,
+      r.sample_count
+    FROM metric_exclusion_ranges r
+    """)
+  try db.execute(sql: "DROP TABLE metric_exclusion_ranges")
+  try db.execute(sql: "ALTER TABLE metric_exclusion_ranges_new RENAME TO metric_exclusion_ranges")
+  try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_metric_exclusion_ranges_start_ms_end_ms ON metric_exclusion_ranges(start_ms, end_ms)")
+  try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_metric_exclusion_ranges_board_id_start_ms_end_ms ON metric_exclusion_ranges(board_id, start_ms, end_ms)")
 }

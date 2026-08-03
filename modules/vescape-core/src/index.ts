@@ -556,7 +556,7 @@ export interface TelemetryHistoryOptions {
 export interface DiagnosticEventOptions {
   fromMs?: number
   toMs?: number
-  deviceId?: string
+  boardId?: string
   limit?: number
 }
 
@@ -666,15 +666,16 @@ export interface HistoryMarker {
     | 'gap'
     | 'app_stop'
     | 'auto_pause'
-  deviceId: string | null
-  deviceName: string | null
+  /** Owning Board (`boards.id`); null when the Marker was written with no Board connected. */
+  boardId: string | null
   message: string | null
   gapMs: number | null
 }
 
 export interface MetricExclusion {
   id: number
-  deviceId: string | null
+  /** Owning Board (`boards.id`). A range excludes one Board's samples, so it is never absent. */
+  boardId: string
   reason: string
   startMs: number
   endMs: number
@@ -1114,8 +1115,8 @@ export interface LocalDiagnosticEvent {
   eventName: string
   operation: string | null
   phase: string | null
-  deviceId: string | null
-  deviceName: string | null
+  /** Owning Board (`boards.id`); null when the event was recorded with no Board connected. */
+  boardId: string | null
   message: string | null
   propertiesJson: string
 }

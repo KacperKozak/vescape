@@ -408,7 +408,7 @@ function getHistoryRange(options: {
   // Markers still key on the BLE identifier (ADR 0028); the fake models one Board per install, so
   // the Board-scoped filter maps straight onto it.
   if (options.boardId != null) {
-    markers = markers.filter((m) => m.deviceId === options.boardId)
+    markers = markers.filter((m) => m.boardId === options.boardId)
   }
 
   const encoded = encodeBoardSamples(samples)
@@ -584,8 +584,7 @@ function addHistoryRide(
     id: nextHistoryMarkerId++,
     occurredAtMs: rideStartMs,
     type: 'connected',
-    deviceId: boardId,
-    deviceName: boardName,
+    boardId,
     message: null,
     gapMs: null,
   })
@@ -593,8 +592,7 @@ function addHistoryRide(
     id: nextHistoryMarkerId++,
     occurredAtMs: rideEndMs,
     type: 'disconnected',
-    deviceId: boardId,
-    deviceName: boardName,
+    boardId,
     message: null,
     gapMs: null,
   })

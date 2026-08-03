@@ -52,7 +52,6 @@ class HistoryGpsProjectionTest {
         capturedAtMs = capturedAtMs,
         elapsedRealtimeMs = capturedAtMs,
         boardId = "board-1",
-        deviceId = "board-1",
         canId = null,
         hasFault = false,
         faultCode = 0,

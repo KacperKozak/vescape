@@ -135,8 +135,7 @@ enum SyncWire {
     try writer.timestamp("occurredAtMs", row["occurred_at_ms"])
     try writer.timestamp("elapsedRealtimeMs", row["elapsed_realtime_ms"])
     try writer.keyText("type", text(row, "type"))
-    try writer.derivedKeyText("deviceId", row["device_id"])
-    writer.text("deviceName", row["device_name"])
+    try writer.derivedKeyText("boardId", row["board_id"])
     writer.text("message", row["message"])
     try writer.timestamp("gapMs", row["gap_ms"])
     return writer.build()
@@ -144,7 +143,7 @@ enum SyncWire {
 
   static func metricExclusionRange(_ row: Row) throws -> String {
     let writer = SyncRowWriter(.metricExclusionRanges)
-    try writer.derivedKeyText("deviceId", row["device_id"])
+    try writer.derivedKeyText("boardId", row["board_id"])
     writer.text("reason", row["reason"])
     try writer.timestamp("startMs", row["start_ms"])
     try writer.timestamp("endMs", row["end_ms"])
@@ -159,8 +158,7 @@ enum SyncWire {
     try writer.keyText("eventName", text(row, "event_name"))
     try writer.derivedKeyText("operation", row["operation"])
     try writer.derivedKeyText("phase", row["phase"])
-    try writer.derivedKeyText("deviceId", row["device_id"])
-    writer.text("deviceName", row["device_name"])
+    try writer.derivedKeyText("boardId", row["board_id"])
     writer.text("message", row["message"])
     writer.text("propertiesJson", row["properties_json"])
     return writer.build()

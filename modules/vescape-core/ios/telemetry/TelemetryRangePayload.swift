@@ -16,7 +16,7 @@ extension TelemetryRepository {
     guard let pool else { return emptyRangePayload() }
     // Markers and Metric Exclusion Ranges still key on the BLE identifier (ADR 0028), so a
     // Board-scoped range read translates before it can filter them.
-    let deviceId = Self.bleId(forBoardId: boardId)
+
     // Battery configs, board names and the smoothing window are read up front (each opens its own
     // DB read) so the estimate stays a pure computation inside the range read below.
     let configs = batteryConfigByBoard()
@@ -35,13 +35,13 @@ extension TelemetryRepository {
       )
       let markers = try Row.fetchAll(
         db,
-        sql: "SELECT * FROM telemetry_markers WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND (? IS NULL OR device_id = ?) ORDER BY occurred_at_ms ASC",
-        arguments: [fromMs, toMs, deviceId, deviceId]
+        sql: "SELECT * FROM telemetry_markers WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND (? IS NULL OR board_id = ?) ORDER BY occurred_at_ms ASC",
+        arguments: [fromMs, toMs, boardId, boardId]
       )
       let exclusions = try Row.fetchAll(
         db,
-        sql: "SELECT * FROM metric_exclusion_ranges WHERE end_ms >= ? AND start_ms <= ? AND (? IS NULL OR device_id = ?) ORDER BY start_ms ASC",
-        arguments: [fromMs, toMs, deviceId, deviceId]
+        sql: "SELECT * FROM metric_exclusion_ranges WHERE end_ms >= ? AND start_ms <= ? AND (? IS NULL OR board_id = ?) ORDER BY start_ms ASC",
+        arguments: [fromMs, toMs, boardId, boardId]
       ).map(exclusionMap)
       let percents = self.batteryPercents(sampleRows, configs: configs, windowMs: windowMs)
       return mergeTelemetryPayload(sampleColumns(sampleRows, batteryPercents: percents, boardNames: boardNames), [

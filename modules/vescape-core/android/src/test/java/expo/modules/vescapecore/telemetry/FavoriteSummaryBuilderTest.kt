@@ -217,7 +217,6 @@ class FavoriteSummaryBuilderTest {
     BucketTelemetryPoint(
       capturedAtMs = capturedAtMs,
       boardId = "board-1",
-      deviceId = "board-1",
       speedCentiKmh = speedCentiKmh,
       batteryVoltageMv = 50_000,
       motorCurrentMa = 10_000,

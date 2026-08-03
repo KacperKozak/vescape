@@ -5,7 +5,6 @@ import kotlin.math.roundToLong
 
 // @parity /modules/vescape-core/ios/telemetry/TelemetryBucketBuilder.swift
 internal const val TELEMETRY_BUCKET_SIZE_MS = 60_000L
-internal const val UNKNOWN_TELEMETRY_DEVICE_ID = ""
 
 /**
  * Stand-in Board id for buckets whose samples match no saved Board. `board_id` is part of the
@@ -25,8 +24,6 @@ internal data class BucketTelemetryPoint(
   val capturedAtMs: Long,
   /** Owning Board (`boards.id`); the durable identity telemetry is keyed on (ADR 0028). */
   val boardId: String?,
-  /** BLE identifier. Not stored on frames or buckets — only Metric Exclusion Ranges still key on it. */
-  val deviceId: String?,
   val speedCentiKmh: Int,
   val batteryVoltageMv: Int,
   val motorCurrentMa: Int,

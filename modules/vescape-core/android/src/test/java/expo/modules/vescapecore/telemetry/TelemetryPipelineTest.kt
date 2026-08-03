@@ -266,9 +266,7 @@ class TelemetryPipelineTest {
     ): TelemetryCapture = TelemetryCapture(
         capturedAtMs = parsed.lastPacketAt,
         elapsedRealtimeMs = parsed.lastPacketAt,
-        boardId = cfg.deviceId,
-        deviceId = cfg.deviceId,
-        deviceName = cfg.deviceName,
+        boardId = cfg.appBoardId,
         canId = canId,
         hasFault = parsed.hasFault,
         faultCode = parsed.faultCode,

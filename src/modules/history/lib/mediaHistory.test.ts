@@ -44,8 +44,7 @@ function marker(occurredAtMs: number, type: HistoryMarker['type']): HistoryMarke
     id: occurredAtMs,
     occurredAtMs,
     type,
-    deviceId: null,
-    deviceName: null,
+    boardId: null,
     message: null,
     gapMs: null,
   }

@@ -200,7 +200,7 @@ data class TelemetryMinuteBucketEntity(
   tableName = "telemetry_markers",
   indices = [
     Index(value = ["occurred_at_ms"]),
-    Index(value = ["device_id", "occurred_at_ms"]),
+    Index(value = ["board_id", "occurred_at_ms"]),
   ],
 )
 data class TelemetryMarkerEntity(
@@ -211,10 +211,9 @@ data class TelemetryMarkerEntity(
   @ColumnInfo(name = "elapsed_realtime_ms")
   val elapsedRealtimeMs: Long,
   val type: String,
-  @ColumnInfo(name = "device_id")
-  val deviceId: String?,
-  @ColumnInfo(name = "device_name")
-  val deviceName: String?,
+  /** Owning Board (`boards.id`); null when the Marker was written with no Board connected. */
+  @ColumnInfo(name = "board_id")
+  val boardId: String?,
   val message: String?,
   @ColumnInfo(name = "gap_ms")
   val gapMs: Long?,
@@ -225,7 +224,7 @@ data class TelemetryMarkerEntity(
   indices = [
     Index(value = ["occurred_at_ms"]),
     Index(value = ["event_name"]),
-    Index(value = ["device_id", "occurred_at_ms"]),
+    Index(value = ["board_id", "occurred_at_ms"]),
   ],
 )
 data class DiagnosticEventEntity(
@@ -239,10 +238,9 @@ data class DiagnosticEventEntity(
   val eventName: String,
   val operation: String?,
   val phase: String?,
-  @ColumnInfo(name = "device_id")
-  val deviceId: String?,
-  @ColumnInfo(name = "device_name")
-  val deviceName: String?,
+  /** Owning Board (`boards.id`); null when the event was recorded with no Board connected. */
+  @ColumnInfo(name = "board_id")
+  val boardId: String?,
   val message: String?,
   @ColumnInfo(name = "properties_json")
   val propertiesJson: String,
@@ -540,14 +538,15 @@ data class SyncBindingEntity(
   tableName = "metric_exclusion_ranges",
   indices = [
     Index(value = ["start_ms", "end_ms"]),
-    Index(value = ["device_id", "start_ms", "end_ms"]),
+    Index(value = ["board_id", "start_ms", "end_ms"]),
   ],
 )
 data class MetricExclusionRangeEntity(
   @PrimaryKey(autoGenerate = true)
   val id: Long = 0,
-  @ColumnInfo(name = "device_id")
-  val deviceId: String,
+  /** Owning Board (`boards.id`). A range excludes one Board's samples, so it is never absent. */
+  @ColumnInfo(name = "board_id")
+  val boardId: String,
   val reason: String,
   @ColumnInfo(name = "start_ms")
   val startMs: Long,

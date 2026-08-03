@@ -199,20 +199,19 @@ internal func insertMarker(_ db: Database, _ marker: [String: Any?]) throws {
   let occurredAtMs = telemetryLong(marker["occurredAtMs"] ?? nil) ?? telemetryNowMs()
   let elapsedRealtimeMs = telemetryLong(marker["elapsedRealtimeMs"] ?? nil) ?? telemetryElapsedMs()
   let type = marker["type"] as? String ?? "event"
-  let deviceId = marker["deviceId"] as? String
-  let deviceName = marker["deviceName"] as? String
+  let boardId = marker["boardId"] as? String
   let message = marker["message"] as? String
   let gapMs = telemetryLong(marker["gapMs"] ?? nil)
   try db.execute(
-    sql: "INSERT INTO telemetry_markers (occurred_at_ms, elapsed_realtime_ms, type, device_id, device_name, message, gap_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    arguments: [occurredAtMs, elapsedRealtimeMs, type, deviceId, deviceName, message, gapMs]
+    sql: "INSERT INTO telemetry_markers (occurred_at_ms, elapsed_realtime_ms, type, board_id, message, gap_ms) VALUES (?, ?, ?, ?, ?, ?)",
+    arguments: [occurredAtMs, elapsedRealtimeMs, type, boardId, message, gapMs]
   )
 }
 
 internal func insertExclusion(_ db: Database, _ range: MetricExclusionRange) throws {
   try db.execute(
-    sql: "INSERT INTO metric_exclusion_ranges (device_id, reason, start_ms, end_ms, sample_count) VALUES (?, ?, ?, ?, ?)",
-    arguments: [range.deviceId, range.reason, range.startMs, range.endMs, range.sampleCount]
+    sql: "INSERT INTO metric_exclusion_ranges (board_id, reason, start_ms, end_ms, sample_count) VALUES (?, ?, ?, ?, ?)",
+    arguments: [range.boardId, range.reason, range.startMs, range.endMs, range.sampleCount]
   )
 }
 
@@ -303,8 +302,7 @@ internal func markerMap(_ row: Row) -> [String: Any?] {
     "id": row["id"] as Int64,
     "occurredAtMs": row["occurred_at_ms"] as Int64,
     "type": row["type"] as String,
-    "deviceId": row["device_id"] as String?,
-    "deviceName": row["device_name"] as String?,
+    "boardId": row["board_id"] as String?,
     "message": row["message"] as String?,
     "gapMs": row["gap_ms"] as Int64?,
   ]
@@ -320,7 +318,7 @@ internal func exclusionMap(_ row: Row) -> [String: Any?] {
   }
   return [
     "id": row["id"] as Int64,
-    "deviceId": (row["device_id"] as String).isEmpty ? nil : row["device_id"] as String,
+    "boardId": row["board_id"] as String,
     "reason": reason,
     "startMs": row["start_ms"] as Int64,
     "endMs": row["end_ms"] as Int64,
@@ -362,8 +360,6 @@ internal func bucketPoint(_ row: Row) -> BucketTelemetryPoint? {
   BucketTelemetryPoint(
     capturedAtMs: row["captured_at_ms"] as Int64,
     boardId: row["board_id"] as String?,
-    // Frames never carried the BLE identifier; only live capture has one, for markers.
-    deviceId: nil,
     speedCentiKmh: row["speed_centi_kmh"] as Int? ?? 0,
     batteryVoltageMv: row["battery_voltage_mv"] as Int? ?? 0,
     motorCurrentMa: row["motor_current_ma"] as Int? ?? 0,

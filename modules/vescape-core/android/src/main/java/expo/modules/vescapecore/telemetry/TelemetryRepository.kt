@@ -61,11 +61,8 @@ data class TelemetryLocationCapture(
 data class TelemetryCapture(
   val capturedAtMs: Long,
   val elapsedRealtimeMs: Long,
-  /** Owning Board (`boards.id`) — what frames and buckets are keyed on (ADR 0028). */
+  /** Owning Board (`boards.id`) — what every telemetry table is keyed on (ADR 0028). */
   val boardId: String?,
-  /** BLE identifier; still stamped on markers and diagnostic events, never on frames or buckets. */
-  val deviceId: String?,
-  val deviceName: String,
   val canId: Int?,
   val hasFault: Boolean,
   val faultCode: Int,
@@ -144,8 +141,7 @@ class TelemetryRepository private constructor(context: Context) {
 
   fun recordMarker(
     type: String,
-    deviceId: String?,
-    deviceName: String?,
+    boardId: String?,
     message: String? = null,
     gapMs: Long? = null,
     occurredAtMs: Long = System.currentTimeMillis(),
@@ -155,8 +151,7 @@ class TelemetryRepository private constructor(context: Context) {
       occurredAtMs = occurredAtMs,
       elapsedRealtimeMs = elapsedRealtimeMs,
       type = type,
-      deviceId = deviceId,
-      deviceName = deviceName,
+      boardId = boardId,
       message = message,
       gapMs = gapMs,
     )
@@ -174,8 +169,7 @@ class TelemetryRepository private constructor(context: Context) {
       eventName = eventName,
       operation = properties["operation"] as? String,
       phase = properties["phase"] as? String,
-      deviceId = properties["ble_id"] as? String,
-      deviceName = properties["board_nickname"] as? String,
+      boardId = properties["board_id"] as? String,
       message = properties["message"] as? String,
       propertiesJson = JSONObject(sanitizeDiagnosticProperties(properties)).toString(),
     )
@@ -219,8 +213,7 @@ class TelemetryRepository private constructor(context: Context) {
               occurredAtMs = capture.capturedAtMs,
               elapsedRealtimeMs = capture.elapsedRealtimeMs,
               type = "gap",
-              deviceId = capture.deviceId,
-              deviceName = capture.deviceName,
+              boardId = capture.boardId,
               message = null,
               gapMs = gapMs,
             ),
@@ -292,7 +285,7 @@ class TelemetryRepository private constructor(context: Context) {
     if (buckets.isEmpty()) return@withContext emptyList()
     val markerFrom = buckets.minOf { it.bucketStartMs } - GAP_BOUNDARY_MS
     val markerTo = buckets.maxOf { it.bucketStartMs } + TELEMETRY_BUCKET_SIZE_MS
-    val markers = dao.getMarkers(markerFrom, markerTo, bleIdForBoard(query.boardId))
+    val markers = dao.getMarkers(markerFrom, markerTo, query.boardId)
     val boardNames = boardNamesById()
     buckets.map { bucket ->
       val marker = markers.lastOrNull {
@@ -476,15 +469,6 @@ class TelemetryRepository private constructor(context: Context) {
   private suspend fun boardNamesById(): Map<String, String> =
     dao.getBoardNames().associate { it.id to it.name }
 
-  /**
-   * The BLE identifier a Board currently claims. Markers, diagnostic events and Metric Exclusion
-   * Ranges still key on it, so a Board-scoped query has to translate. A Board re-linked since the
-   * ride no longer resolves its older markers — accepted: they are low-cardinality display rows,
-   * not the sample stream (ADR 0028).
-   */
-  private suspend fun bleIdForBoard(boardId: String?): String? =
-    boardId?.let { dao.getBoardBleId(it) }
-
   /** Derive IR-compensated battery % on read, mirroring the live native path. */
   private fun deriveBatteryPercent(
     state: FullTelemetryState,
@@ -523,11 +507,10 @@ class TelemetryRepository private constructor(context: Context) {
     val query = SampleQueryOptions.from(options)
     val samples = getSampleStates(query.fromMs, query.toMs, query.boardId, query.limit)
     val configs = batteryConfigByBoard()
-    val deviceId = bleIdForBoard(query.boardId)
     smoothedSampleColumns(samples, configs) + mapOf(
       "gpsSamples" to samples.toGpsSampleMaps(boardNamesById()),
-      "markers" to dao.getMarkers(query.fromMs, query.toMs, deviceId).map { it.toMap() },
-      "exclusions" to dao.getExclusions(query.fromMs, query.toMs, deviceId).map { it.toMap() },
+      "markers" to dao.getMarkers(query.fromMs, query.toMs, query.boardId).map { it.toMap() },
+      "exclusions" to dao.getExclusions(query.fromMs, query.toMs, query.boardId).map { it.toMap() },
     )
   }
 
@@ -543,7 +526,7 @@ class TelemetryRepository private constructor(context: Context) {
 
   suspend fun getDiagnosticEvents(options: Map<String, Any?>): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
     val query = DiagnosticQueryOptions.from(options)
-    dao.getDiagnosticEvents(query.fromMs, query.toMs, query.deviceId, query.limit).map { it.toMap() }
+    dao.getDiagnosticEvents(query.fromMs, query.toMs, query.boardId, query.limit).map { it.toMap() }
   }
 
   suspend fun clearDiagnosticEvents() = withContext(Dispatchers.IO) {
@@ -564,10 +547,9 @@ class TelemetryRepository private constructor(context: Context) {
     flushNow()
     val requested = TelemetryTimeRange(query.fromMs, query.toMs)
     val protected = favoriteTelemetryRanges()
-    val deviceId = bleIdForBoard(query.boardId)
     promoteProtectedRangeStarts(protected, query.boardId)
     val deleted = subtractProtectedTelemetryRanges(requested, protected).sumOf { range ->
-      dao.deleteRange(range.startMs, range.endMs, query.boardId, deviceId)
+      dao.deleteRange(range.startMs, range.endMs, query.boardId)
     }
     deleted
   }
@@ -949,7 +931,7 @@ private data class HistoryQueryOptions(
 private data class DiagnosticQueryOptions(
   val fromMs: Long,
   val toMs: Long,
-  val deviceId: String?,
+  val boardId: String?,
   val limit: Int,
 ) {
   companion object {
@@ -958,7 +940,7 @@ private data class DiagnosticQueryOptions(
       return DiagnosticQueryOptions(
         fromMs = options.long("fromMs") ?: 0L,
         toMs = toMs,
-        deviceId = options["deviceId"] as? String,
+        boardId = options["boardId"] as? String,
         limit = (options.int("limit") ?: 200).coerceIn(1, 1_000),
       )
     }
@@ -1010,8 +992,6 @@ internal data class FullTelemetryState(
   val capturedAtMs: Long,
   val elapsedRealtimeMs: Long,
   val boardId: String?,
-  /** Kept off the persisted frame; only the live capture path needs it, for markers. */
-  val deviceId: String?,
   val canId: Int?,
   val hasFault: Boolean,
   val faultCode: Int,
@@ -1119,7 +1099,6 @@ internal data class FullTelemetryState(
   fun toBucketPoint(): BucketTelemetryPoint = BucketTelemetryPoint(
     capturedAtMs = capturedAtMs,
     boardId = boardId,
-    deviceId = deviceId,
     speedCentiKmh = speedCentiKmh,
     batteryVoltageMv = batteryVoltageMv,
     motorCurrentMa = motorCurrentMa,
@@ -1139,7 +1118,6 @@ internal data class FullTelemetryState(
       capturedAtMs = capture.capturedAtMs,
       elapsedRealtimeMs = capture.elapsedRealtimeMs,
       boardId = capture.boardId,
-      deviceId = capture.deviceId,
       canId = capture.canId,
       hasFault = capture.hasFault,
       faultCode = capture.faultCode,
@@ -1190,8 +1168,6 @@ internal data class FullTelemetryState(
         capturedAtMs = frame.capturedAtMs,
         elapsedRealtimeMs = frame.elapsedRealtimeMs,
         boardId = frame.boardId ?: base?.boardId,
-        // Frames never carried the BLE identifier, so a replayed state has none.
-        deviceId = base?.deviceId,
         canId = frame.canId ?: base?.canId,
         hasFault = (frame.flags and TELEMETRY_FLAG_HAS_FAULT) != 0,
         faultCode = faultCode,
@@ -1283,15 +1259,14 @@ private fun TelemetryMarkerEntity.toMap(): Map<String, Any?> = mapOf(
   "id" to id,
   "occurredAtMs" to occurredAtMs,
   "type" to type,
-  "deviceId" to deviceId,
-  "deviceName" to deviceName,
+  "boardId" to boardId,
   "message" to message,
   "gapMs" to gapMs,
 )
 
 private fun MetricExclusionRangeEntity.toMap(): Map<String, Any?> = mapOf(
   "id" to id,
-  "deviceId" to deviceId.ifBlank { null },
+  "boardId" to boardId,
   "reason" to reason,
   "startMs" to startMs,
   "endMs" to endMs,
@@ -1316,8 +1291,7 @@ private fun DiagnosticEventEntity.toMap(): Map<String, Any?> = mapOf(
   "eventName" to eventName,
   "operation" to operation,
   "phase" to phase,
-  "deviceId" to deviceId,
-  "deviceName" to deviceName,
+  "boardId" to boardId,
   "message" to message,
   "propertiesJson" to propertiesJson,
 )
