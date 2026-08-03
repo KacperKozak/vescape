@@ -12,10 +12,26 @@ import android.util.Log
 private const val REPLAY_END_TAIL_MS = 250L
 
 /**
+ * How much of the recording plays as fast as it decodes before playback settles to 1×.
+ *
+ * Sized to fill the live charts: it wants to cover the widest live-history window a capture or an
+ * E2E run is likely to ask for, so the sparklines are already drawn when the run starts looking at
+ * them. Overshooting the configured window costs nothing beyond a little decode — the surplus is
+ * pruned on arrival like any other sample that has aged out.
+ *
+ * @parity /modules/vescape-core/ios/replay/ReplayClock.swift `replayWarmupMs`
+ * @parity /scripts/screenshots.ts `REPLAY_WARMUP_MINUTES`
+ */
+internal const val REPLAY_WARMUP_MS = 3 * 60_000L
+
+/**
  * Dev-mode [SessionTransport] that plays a Debug Recording through the real session stack
  * (ADR 0024): fakes the connect/subscribing/ready callbacks, emits recorded `rx` chunks *and*
- * recorded GPS fixes at their recorded `t` offsets at 1× real time on one merged timeline,
- * swallows writes, and ends the session like a real disconnect when the recording runs out.
+ * recorded GPS fixes at their recorded `t` offsets on one merged timeline, swallows writes, and
+ * ends the session like a real disconnect when the recording runs out.
+ * The first [REPLAY_WARMUP_MS] of the recording plays as fast as it decodes, against a [ReplayClock]
+ * that starts that far in the past, so the session comes up with its live window already filled
+ * instead of spending real minutes waiting for one; the remainder plays at 1× real time.
  * Replaying a ride means reproducing where it happened, so the recording owns position for the
  * whole session; a recording without `location` lines replays like ordinary use without a GPS fix.
  * The replay session runs with `recordingEnabled = false` so playback never records a new Debug
@@ -36,6 +52,9 @@ internal class ReplayTransport(
     private val listener: VescGattListener,
     private val dispatchListener: ((() -> Unit) -> Unit),
     private val onLocation: (ReplayLocation) -> Unit,
+    /** The session clock this playback drives; installed by the controller for the session. */
+    val clock: ReplayClock,
+    private val warmupMs: Long = REPLAY_WARMUP_MS,
 ) : SessionTransport {
     @Volatile
     private var cancelled = false
@@ -73,8 +92,8 @@ internal class ReplayTransport(
     /**
      * Cursor-based pacing: only the next chunk is ever scheduled, so an hour-long recording never
      * floods the handler with queued callbacks. Recorded `t` is relative to recording start;
-     * scheduling against `playbackStartedAt` preserves the original absolute pacing (including the
-     * recorded connect handshake gap) at 1× real time.
+     * scheduling against the session clock preserves the original absolute pacing (including the
+     * recorded connect handshake gap) at 1× real time, once past the warmup window.
      */
     private fun scheduleNext(events: List<ReplayEvent>, index: Int) {
         if (cancelled) return
@@ -96,9 +115,16 @@ internal class ReplayTransport(
     }
 
     private fun postAt(recordedT: Long, block: () -> Unit) {
-        val delayMs = (playbackStartedAt + recordedT - System.currentTimeMillis()).coerceAtLeast(0L)
         val runnable = Runnable { if (!cancelled) { pending = null; block() } }
         pending = runnable
+        // Warmup dispatches one event per handler message with no delay. The cursor is what keeps
+        // that bounded — posting the whole window at once would starve the main loop the session
+        // needs in order to process what is being dispatched into it.
+        if (recordedT < warmupMs) clock.advanceWarmup(recordedT, playbackStartedAt)
+        // Pace against the session clock, not wall time: the two agree exactly at 1×, and once the
+        // clock freezes at the end of warmup this keeps playback resuming from the warmup boundary
+        // rather than sleeping out the window the warmup just skipped.
+        val delayMs = (playbackStartedAt - warmupMs + recordedT - clock.nowMs()).coerceAtLeast(0L)
         handler.postDelayed(runnable, delayMs)
     }
 

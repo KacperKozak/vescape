@@ -17,10 +17,11 @@
  * side. Everything platform-specific lives behind `CaptureDriver` (`scripts/lib/captureDriver.ts`).
  *
  * The hero panel is captured last, on purpose. `TelemetryPipeline.liveSeries` buckets the sparkline
- * over `liveHistoryLimit` minutes of *receipt* timestamps, so a full sparkline needs that much wall
- * clock at 1x; there is deliberately no playback-rate knob, because fast-forwarding would compress
- * the samples into a fraction of the window instead of filling it. The replay recording must be at
- * least as long as the whole run.
+ * over `liveHistoryLimit` minutes of *receipt* timestamps, so filling it takes that much session
+ * time. Replay warmup provides the first `REPLAY_WARMUP_MINUTES` of it up front — playing fast
+ * against a clock shifted into the past, which fills the window rather than compressing the samples
+ * into a fraction of it — and the run only waits out whatever window is left beyond that. The replay
+ * recording must be at least as long as the whole run.
  */
 import { mkdirSync, readdirSync } from 'fs'
 import { basename, join } from 'path'
@@ -39,6 +40,13 @@ const PLATFORMS: CapturePlatform[] = ['android', 'ios']
 const DEFAULT_REPLAY = 'replay-thor301.jsonl'
 /** `AppSettings.liveHistoryLimit` default — the sparkline window the hero panel has to fill. */
 const DEFAULT_SPARKLINE_MINUTES = 5
+/**
+ * How much of that window a replay hands over already filled, from its warmup.
+ *
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/replay/ReplayTransport.kt `REPLAY_WARMUP_MS`
+ * @parity /modules/vescape-core/ios/replay/ReplayClock.swift `replayWarmupMs`
+ */
+const REPLAY_WARMUP_MINUTES = 3
 
 interface Args {
   /** `null` until the picker runs — `--platform` skips it. */
@@ -186,7 +194,8 @@ async function capturePlatform(platform: CapturePlatform, args: Args): Promise<v
     for (const file of rest) await runFlow(file, driver)
 
     if (hero.length > 0 && !args.noWait) {
-      const remainingMs = args.sparklineMinutes * 60_000 - (Date.now() - bootedAt)
+      const toFillMs = Math.max(0, args.sparklineMinutes - REPLAY_WARMUP_MINUTES) * 60_000
+      const remainingMs = toFillMs - (Date.now() - bootedAt)
       if (remainingMs > 0) {
         console.log(`› Waiting ${Math.ceil(remainingMs / 1000)}s for the sparkline window to fill…`)
         await Bun.sleep(remainingMs)
