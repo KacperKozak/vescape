@@ -53,6 +53,7 @@ import expo.modules.vescapecore.service.VESC_SESSION_TAG
 import expo.modules.vescapecore.protocol.SessionTransport
 import expo.modules.vescapecore.protocol.VescGattClient
 import expo.modules.vescapecore.protocol.VescGattListener
+import expo.modules.vescapecore.replay.ReplayLocation
 import expo.modules.vescapecore.replay.ReplayTransport
 import expo.modules.vescapecore.VescLiveStateSnapshot
 import expo.modules.vescapecore.protocol.VescPacketReassembler
@@ -83,10 +84,12 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.location.Location
+import android.location.LocationManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import java.io.File
 import kotlin.math.roundToInt
@@ -901,6 +904,7 @@ private var wearAutoLaunchOnConnect = true
                 recordingName = it,
                 listener = gattListener,
                 dispatchListener = ::dispatchGattEvent,
+                onLocation = ::onReplayLocation,
             )
         }
         selectedBoardName = start.boardConfig.deviceName
@@ -1959,7 +1963,14 @@ private var wearAutoLaunchOnConnect = true
         CoreForegroundService.emitEvent?.invoke(name, body)
     }
 
+    /**
+     * The one place the phone's GPS is armed. A replay owns position for its whole session, so the
+     * guard lives here rather than at the call sites: the map, the settings toggle and the session
+     * start all ask for location updates independently, and a single live fix slipping through is
+     * enough to make the marker jump off the recorded track.
+     */
     private fun startLocationUpdates() {
+        if (boardConfig?.replayRecordingName != null) return
         gpsError = gpsMonitor.start()
         if (gpsError != null) emitState()
     }
@@ -1993,6 +2004,30 @@ private var wearAutoLaunchOnConnect = true
         resetIdlePause()
         recordingCoordinator.disableTelemetryRecording(session)
         emitState()
+    }
+
+    /**
+     * Feed a recorded fix into the same path a live one takes, so everything downstream — map,
+     * trail, ride stats, Group Ride presence — sees the ride exactly as it happened.
+     *
+     * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `onReplayLocation`
+     */
+    private fun onReplayLocation(fix: ReplayLocation) {
+        // GPS_PROVIDER, not a "replay" marker: the recorded fixes *were* GPS fixes, and
+        // `isPreciseGpsFix` keys off the provider — anything else downgrades the whole replayed
+        // track to approximate, which drops it from the trail and leaves the map on the phone's
+        // own position.
+        val location = Location(LocationManager.GPS_PROVIDER).apply {
+            latitude = fix.latitude
+            longitude = fix.longitude
+            time = System.currentTimeMillis()
+            elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
+            fix.speedMps?.let { speed = it }
+            fix.bearingDeg?.let { bearing = it }
+            fix.accuracyM?.let { accuracy = it }
+            fix.altitudeM?.let { altitude = it }
+        }
+        onLocationUpdated(location)
     }
 
     private fun onLocationUpdated(location: Location) {
