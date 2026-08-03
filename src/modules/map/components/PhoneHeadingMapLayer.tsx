@@ -7,15 +7,17 @@ import type { CameraSnapshot } from '@/modules/map/lib/cameraMotion'
 import {
   deadBandPhoneHeading,
   startPhoneHeadingUpdates,
+  type PhoneHeadingAdapter,
   type PhoneHeadingStatus,
 } from '@/modules/map/lib/phoneHeading'
-import { deviceMotionPhoneHeadingAdapter } from '@/modules/map/lib/deviceMotionPhoneHeadingAdapter'
 
 const GPS_HEADING_ICON_ID = 'center-phone-heading'
 const GPS_HEADING_ICON = require('@rnmapbox/maps/src/assets/heading.png')
 
 interface PhoneHeadingMapLayerProps {
   active: boolean
+  /** Compass source. The caller picks it so a replay can supply a simulated one. */
+  adapter: PhoneHeadingAdapter
   followCamera: boolean
   approximateFix: boolean
   coordinate: { longitude: number; latitude: number } | null
@@ -50,6 +52,7 @@ function phoneHeadingShape(
 
 export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
   active,
+  adapter,
   followCamera,
   approximateFix,
   coordinate,
@@ -89,7 +92,7 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
     let disposed = false
     let remove: (() => void) | null = null
 
-    void startPhoneHeadingUpdates(deviceMotionPhoneHeadingAdapter, (rawHeadingDeg) => {
+    void startPhoneHeadingUpdates(adapter, (rawHeadingDeg) => {
       if (disposed) return
       const headingDeg = deadBandPhoneHeading(headingDegRef.current, rawHeadingDeg)
       if (headingDeg === headingDegRef.current) return
@@ -120,7 +123,7 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
       disposed = true
       remove?.()
     }
-  }, [active, cameraRef, currentCameraRef, onHeadingChange, onStatusChange])
+  }, [active, adapter, cameraRef, currentCameraRef, onHeadingChange, onStatusChange])
 
   return (
     <>
