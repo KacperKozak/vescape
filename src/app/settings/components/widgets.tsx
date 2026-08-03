@@ -463,7 +463,10 @@ function BackupStatusLineShowcase() {
         <BackupStatusLine
           status={{ ...base, activity: 'upToDate', lastUploadAtMs: SHOWCASE_UPLOADED_AT }}
         />
-        <BackupStatusLine status={{ ...base, activity: 'syncing', pendingRows: 1_284 }} />
+        <BackupStatusLine
+          status={{ ...base, activity: 'syncing', pendingRows: 1_284 }}
+          backlog={4_000}
+        />
         <BackupStatusLine status={{ ...base, activity: 'waitingForWifi', pendingRows: 42 }} />
         <BackupStatusLine status={{ ...base, activity: 'offline', pendingRows: 42 }} />
         <BackupStatusLine status={{ ...base, activity: 'paused', pause: 'authentication' }} />

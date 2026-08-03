@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { SyncStatus } from 'vescape-core'
 
-import { backupStatusCopy } from './backupStatus'
+import { backupProgress, backupStatusCopy, nextBackupBacklog } from './backupStatus'
 
 const status = (patch: Partial<SyncStatus>): SyncStatus => ({
   accountId: 'acc_1',
@@ -46,12 +46,42 @@ describe('backupStatusCopy', () => {
     expect(backupStatusCopy(status({}), NOW).label).toBe('Backed up')
   })
 
-  test('syncing counts the pending rows', () => {
-    expect(backupStatusCopy(status({ activity: 'syncing', pendingRows: 1 }), NOW).label).toBe(
-      'Backing up 1 change…',
-    )
+  test('syncing leaves the counts to the progress bar', () => {
     expect(backupStatusCopy(status({ activity: 'syncing', pendingRows: 4 }), NOW).label).toBe(
-      'Backing up 4 changes…',
+      'Backing up…',
     )
+  })
+})
+
+describe('nextBackupBacklog', () => {
+  test('holds the high-water mark while a drain runs, so progress never goes backwards', () => {
+    let backlog = nextBackupBacklog(0, status({ activity: 'syncing', pendingRows: 900 }))
+    expect(backlog).toBe(900)
+    backlog = nextBackupBacklog(backlog, status({ activity: 'syncing', pendingRows: 400 }))
+    expect(backlog).toBe(900)
+  })
+
+  test('rows recorded mid-drain raise the total instead of overflowing the bar', () => {
+    const backlog = nextBackupBacklog(900, status({ activity: 'syncing', pendingRows: 1_200 }))
+    expect(backlog).toBe(1_200)
+  })
+
+  test('an emptied queue ends the drain, so the next one measures itself afresh', () => {
+    expect(nextBackupBacklog(900, status({ activity: 'upToDate' }))).toBe(0)
+  })
+})
+
+describe('backupProgress', () => {
+  test('measures delivered rows against the drain total', () => {
+    expect(backupProgress(400, 1_000)).toEqual({ current: 600, total: 1_000 })
+  })
+
+  test('has nothing to draw without a backlog or without pending rows', () => {
+    expect(backupProgress(0, 1_000)).toBeNull()
+    expect(backupProgress(400, 0)).toBeNull()
+  })
+
+  test('a backlog first seen mid-drain reads as no progress rather than a full bar', () => {
+    expect(backupProgress(1_000, 1_000)).toEqual({ current: 0, total: 1_000 })
   })
 })

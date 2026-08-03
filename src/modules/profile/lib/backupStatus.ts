@@ -23,6 +23,30 @@ const PAUSE_LABELS: Record<SyncPauseReason, string> = {
 }
 
 /**
+ * The size of the current backlog, carried across statuses because native reports only what is
+ * still pending. The drain's high-water mark is its total: the count only falls while a backlog
+ * drains, and rows recorded mid-drain raise the mark rather than pretending progress went
+ * backwards. Zero pending ends the drain, so the next one measures itself afresh.
+ */
+export function nextBackupBacklog(previousBacklog: number, status: SyncStatus): number {
+  if (status.pendingRows <= 0) return 0
+  return Math.max(previousBacklog, status.pendingRows)
+}
+
+/**
+ * The drain as delivered-of-total counts for a progress bar, or null when there is nothing to draw.
+ * A backlog we never saw start (JS attached mid-drain reports its first count as the total) still
+ * reads honestly: it begins at zero delivered and fills.
+ */
+export function backupProgress(
+  pendingRows: number,
+  backlog: number,
+): { current: number; total: number } | null {
+  if (backlog <= 0 || pendingRows <= 0) return null
+  return { current: Math.max(0, backlog - pendingRows), total: backlog }
+}
+
+/**
  * Native-owned backup state as one line of rider-facing copy.
  *
  * Pure: the clock is `nowMs` and the caller owns it. Every state native can report has a line here —
@@ -47,11 +71,8 @@ export function backupStatusCopy(status: SyncStatus, nowMs = Date.now()): Backup
         busy: false,
       }
     case 'syncing':
-      return {
-        label: `Backing up ${status.pendingRows} ${status.pendingRows === 1 ? 'change' : 'changes'}…`,
-        color: theme.palette.cyan.color,
-        busy: true,
-      }
+      // The counts live on the progress bar beside this line, so the sentence does not repeat them.
+      return { label: 'Backing up…', color: theme.palette.cyan.color, busy: true }
     case 'waitingForWifi':
       return {
         label: 'Waiting for Wi-Fi to back up',

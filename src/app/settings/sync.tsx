@@ -20,15 +20,15 @@ export default function SyncSettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={CloudArrowUpIcon}
-          description="Back up rides, boards and tunes to your Vescape account."
+          description="Keep everything this phone records on your Vescape account."
         />
 
         <SettingsCard>
           <SettingsRow
             icon={CloudArrowUpIcon}
             iconColor={theme.palette.cyan.color}
-            label="Back up my rides"
-            hint="Off means nothing is uploaded at all — no rides, no boards, no settings"
+            label="Back up to Vescape"
+            hint="Rides, boards, tunes and settings. Off means nothing is uploaded at all"
             right={
               <Switch
                 value={syncEnabled}
@@ -38,7 +38,9 @@ export default function SyncSettingsScreen() {
               />
             }
           >
-            <BackupStatusLine />
+            <View style={styles.status}>
+              <BackupStatusLine />
+            </View>
           </SettingsRow>
 
           {syncEnabled ? (
@@ -76,6 +78,7 @@ export default function SyncSettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.palette.slate.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
+  status: { paddingHorizontal: 14, paddingBottom: 14 },
   note: { paddingHorizontal: 4 },
   noteText: {
     color: theme.palette.slate.textMuted,

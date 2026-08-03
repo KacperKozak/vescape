@@ -3,6 +3,8 @@ import { create } from 'zustand'
 
 import { addSyncStatusListener, getSyncStatus, type SyncStatus } from 'vescape-core'
 
+import { nextBackupBacklog } from '@/modules/profile/lib/backupStatus'
+
 /** What JS shows before the first native status lands: nothing is claimed about backup yet. */
 const UNKNOWN: SyncStatus = {
   accountId: null,
@@ -14,6 +16,8 @@ const UNKNOWN: SyncStatus = {
 
 interface SyncStatusState {
   status: SyncStatus
+  /** Rows the current drain started with, so a remaining count can be shown as progress. */
+  backlog: number
   replace: (status: SyncStatus) => void
 }
 
@@ -23,7 +27,9 @@ interface SyncStatusState {
  */
 export const useSyncStatusStore = create<SyncStatusState>((set) => ({
   status: UNKNOWN,
-  replace: (status) => set({ status }),
+  backlog: 0,
+  replace: (status) =>
+    set((state) => ({ status, backlog: nextBackupBacklog(state.backlog, status) })),
 }))
 
 /**
