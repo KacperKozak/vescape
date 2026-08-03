@@ -54,6 +54,8 @@ import expo.modules.vescapecore.protocol.SessionTransport
 import expo.modules.vescapecore.protocol.VescGattClient
 import expo.modules.vescapecore.protocol.VescGattListener
 import expo.modules.vescapecore.replay.ReplayLocation
+import expo.modules.vescapecore.replay.REPLAY_WARMUP_MS
+import expo.modules.vescapecore.replay.ReplayClock
 import expo.modules.vescapecore.replay.ReplayTransport
 import expo.modules.vescapecore.VescLiveStateSnapshot
 import expo.modules.vescapecore.protocol.VescPacketReassembler
@@ -112,6 +114,8 @@ import expo.modules.vescapecore.runtime.HandlerScheduler
 import expo.modules.vescapecore.runtime.LinkIdentity
 import expo.modules.vescapecore.runtime.LinkIntegrity
 import expo.modules.vescapecore.runtime.Scheduler
+import expo.modules.vescapecore.runtime.SessionClock
+import expo.modules.vescapecore.runtime.SystemSessionClock
 import expo.modules.vescapecore.runtime.postDelayedForSession
 import expo.modules.vescapecore.telemetry.AppDataRepository
 import expo.modules.vescapecore.telemetry.AppSettings
@@ -234,8 +238,20 @@ internal class BoardSessionController(private val service: CoreForegroundService
         scheduler = scheduler,
         onTelemetryStale = ::onTelemetryStaleFired,
         captureBuilder = { parsed, cfg, id -> parsed.toCapture(cfg, id) },
+        nowMs = ::nowMs,
         staleTimeoutMs = TELEMETRY_STALE_MS,
     )
+    /**
+     * The clock this session stamps and compares its data against. Wall time for every real
+     * session; a replay swaps in its own for the session's lifetime so a warmed-up playback writes
+     * a timeline that agrees with itself. Set in [beginSession], never read directly — go through
+     * [nowMs].
+     */
+    @Volatile
+    private var sessionClock: SessionClock = SystemSessionClock
+
+    /** @see SessionClock */
+    private fun nowMs(): Long = sessionClock.nowMs()
     private val recordingCoordinator by lazy {
         RecordingCoordinator(
             context = service.applicationContext,
@@ -906,8 +922,11 @@ private var wearAutoLaunchOnConnect = true
                 listener = gattListener,
                 dispatchListener = ::dispatchGattEvent,
                 onLocation = ::onReplayLocation,
+                clock = ReplayClock(REPLAY_WARMUP_MS),
             )
         }
+        // A replay owns the session's notion of time for its lifetime.
+        sessionClock = replayTransport?.clock ?: SystemSessionClock
         selectedBoardName = start.boardConfig.deviceName
         sessionSequence += 1
         val session = BoardSession(id = sessionSequence)
@@ -1167,7 +1186,7 @@ private var wearAutoLaunchOnConnect = true
             COMM_BMS_GET_VALUES -> handleBmsPayload(payload)
             COMM_GET_CUSTOM_CONFIG_XML -> configController.onPayload(ConfigRWEvent.XmlPayloadReceived(payload))
             COMM_GET_CUSTOM_CONFIG -> configController.onPayload(
-                ConfigRWEvent.ConfigBytesPayloadReceived(payload, System.currentTimeMillis()),
+                ConfigRWEvent.ConfigBytesPayloadReceived(payload, nowMs()),
             )
             COMM_SET_CUSTOM_CONFIG -> configController.onPayload(ConfigRWEvent.SetConfigResponseReceived(payload))
             COMM_FORWARD_CAN -> {
@@ -1178,7 +1197,7 @@ private var wearAutoLaunchOnConnect = true
                         COMM_CUSTOM_APP_DATA -> handleCustomAppPayload(payload)
                         COMM_GET_CUSTOM_CONFIG_XML -> configController.onPayload(ConfigRWEvent.XmlPayloadReceived(payload))
                         COMM_GET_CUSTOM_CONFIG -> configController.onPayload(
-                            ConfigRWEvent.ConfigBytesPayloadReceived(payload, System.currentTimeMillis()),
+                            ConfigRWEvent.ConfigBytesPayloadReceived(payload, nowMs()),
                         )
                         COMM_SET_CUSTOM_CONFIG -> configController.onPayload(ConfigRWEvent.SetConfigResponseReceived(payload))
                     }
@@ -1208,7 +1227,7 @@ private var wearAutoLaunchOnConnect = true
             return
         }
         if ((payload[0].toInt() and 0xff) == COMM_CUSTOM_APP_DATA) {
-            val now = System.currentTimeMillis()
+            val now = nowMs()
             val parsed = parseRefloatGetAllData(
                 payload = payload,
                 avgLatency = updateLatency(now),
@@ -1263,7 +1282,7 @@ private var wearAutoLaunchOnConnect = true
 
     // @parity /modules/vescape-core/ios/connection/BoardSessionController.swift (handleBms)
     private fun handleBmsPayload(payload: ByteArray) {
-        val bms = parseBmsValues(payload, System.currentTimeMillis()) ?: return
+        val bms = parseBmsValues(payload, nowMs()) ?: return
         val session = boardSession
         val config = boardConfig
         if (session != null && config != null) {
@@ -1430,7 +1449,7 @@ private var wearAutoLaunchOnConnect = true
         if (!focused) return
         emitBmsSeries(
             "snapshot",
-            bmsSeriesRing.snapshot(telemetryPipeline.recentWindowMs(), System.currentTimeMillis()),
+            bmsSeriesRing.snapshot(telemetryPipeline.recentWindowMs(), nowMs()),
         )
     }
 
@@ -1576,7 +1595,7 @@ private var wearAutoLaunchOnConnect = true
         )
     }
 
-    private fun isTelemetryStale(now: Long = System.currentTimeMillis()): Boolean =
+    private fun isTelemetryStale(now: Long = nowMs()): Boolean =
         now - telemetryPipeline.lastTelemetryAt >= TELEMETRY_STALE_MS
 
     private fun buildLiveTick(
@@ -1673,7 +1692,7 @@ private var wearAutoLaunchOnConnect = true
 
     /** @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `onTelemetryStaleFired` */
     private fun onTelemetryStaleFired() {
-        val now = System.currentTimeMillis()
+        val now = nowMs()
         if (
             boardStatus != BoardPhase.Connected ||
             now - telemetryPipeline.lastTelemetryAt < TELEMETRY_STALE_MS
@@ -1743,7 +1762,7 @@ private var wearAutoLaunchOnConnect = true
 
     private fun stopCurrentBoardSession(emitDisconnected: Boolean) {
         // Final write so the persisted last battery is fresh, not up to 30s stale.
-        persistLastBattery(latestBatterySoc, telemetry?.batteryVoltage, System.currentTimeMillis(), force = true)
+        persistLastBattery(latestBatterySoc, telemetry?.batteryVoltage, nowMs(), force = true)
         remoteTiltController.stop()
         flushTelemetryDiagnostics("stop")
         configController.onSessionTerminated("Board session stopped during Refloat config op")
@@ -1753,6 +1772,9 @@ private var wearAutoLaunchOnConnect = true
         stopPolling()
         transport.clear(markIntentional = true)
         replayTransport = null
+        // The shifted clock belongs to the replay that installed it; anything running between here
+        // and the next session must not still be reading time from the past.
+        sessionClock = SystemSessionClock
         alertCoordinator.stopAllGeiger()
         recordingCoordinator.finishBoardSession(
             status = if (emitDisconnected) "disconnected" else "stopped",
@@ -1924,7 +1946,7 @@ private var wearAutoLaunchOnConnect = true
         transitionBoardPhase(BoardPhase.Error)
     }
 
-    private fun reportedBoardPhase(nowMs: Long = System.currentTimeMillis()): BoardPhase =
+    private fun reportedBoardPhase(atMs: Long = nowMs()): BoardPhase =
         deriveReportedBoardPhase(
             ReportedBoardPhaseInput(
                 rawPhase = boardStatus,
@@ -1932,7 +1954,7 @@ private var wearAutoLaunchOnConnect = true
                 hasActiveBoardSession = boardSession?.let(::isCurrentBoardSession) == true,
                 isStoppingService = isStoppingService,
                 lastTelemetryAt = telemetryPipeline.lastTelemetryAt,
-                nowMs = nowMs,
+                nowMs = atMs,
             ),
         )
 
@@ -1953,7 +1975,7 @@ private var wearAutoLaunchOnConnect = true
     ) {
         if (isStoppingService || notificationRepaintSuppressed) return
         val phase = reportedBoardPhase()
-        if (!notificationGate.shouldPost(phase, System.currentTimeMillis(), force)) return
+        if (!notificationGate.shouldPost(phase, nowMs(), force)) return
         presenter.show(
             phase = phase,
             telemetry = telemetry,
@@ -2037,7 +2059,7 @@ private var wearAutoLaunchOnConnect = true
         val location = Location(LocationManager.GPS_PROVIDER).apply {
             latitude = fix.latitude
             longitude = fix.longitude
-            time = System.currentTimeMillis()
+            time = nowMs()
             elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
             fix.speedMps?.let { speed = it }
             fix.bearingDeg?.let { bearing = it }
@@ -2255,7 +2277,7 @@ private var wearAutoLaunchOnConnect = true
 
     fun applyLiveHistoryLimitMinutes(minutes: Int) {
         telemetryPipeline.setLiveHistoryLimitMinutes(minutes)
-        locationTracker.pruneRecentLocations(System.currentTimeMillis())
+        locationTracker.pruneRecentLocations(nowMs())
     }
 
     private fun refreshLiveHistoryLimit() {

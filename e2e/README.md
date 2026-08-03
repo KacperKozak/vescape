@@ -104,9 +104,9 @@ for overlay view states. Anything genuinely platform-specific lives in `scripts/
 and `scripts/lib/iosCapture.ts` behind the `CaptureDriver` contract, not in a second flow set.
 
 Both runs pin the device to Wrocław old town (`CAPTURE_LOCATION`): `xcrun simctl location set` on
-iOS, `adb emu geo fix` on an Android emulator. The recording has GPS fixes but replay drops them
-(only `ble-chunk`/`rx` is replayed), so without this the map backdrop is whatever default each
-platform boots with and the two sets stop being comparable. A physical Android device keeps its own location — mocking it would mean
+iOS, `adb emu geo fix` on an Android emulator. Replay does own position — the recording's GPS fixes
+are replayed alongside its chunks — but the pin still decides the backdrop before the first replayed
+fix lands, and without it the two sets stop being comparable at boot. A physical Android device keeps its own location — mocking it would mean
 installing a provider app.
 
 iOS captures on an **iPhone 17 Pro Max simulator** (1320x2868, the 6.9" size App Store Connect
@@ -166,7 +166,8 @@ Other flags: `--replay <name>` (default `replay-thor301`), `--no-wait` (skip the
 `--platform android|ios|both` (default `both`).
 
 The hero panel is captured last. `TelemetryPipeline.liveSeries` buckets the sparkline over
-`liveHistoryLimit` minutes of receipt timestamps, so a full sparkline needs that much wall clock at
-1x. There is deliberately no playback-rate knob — fast-forwarding would compress the samples into a
-fraction of the window instead of filling it. The replay recording must be at least as long as the
-whole run.
+`liveHistoryLimit` minutes of receipt timestamps, so filling it takes that much session time. Replay
+warmup covers the first three minutes up front: it plays as fast as it decodes against a clock
+shifted that far into the past, which fills the window instead of compressing the samples into a
+fraction of it (ADR 0024). The run waits out only whatever window is left beyond the warmup. The
+replay recording must be at least as long as the whole run.

@@ -71,6 +71,11 @@ internal final class BoardSessionController: VescGattListener {
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `transport`
   private var replayTransport: ReplayTransport?
   private var transport: SessionTransport { replayTransport ?? gatt }
+  /// The clock this session stamps and compares its data against. Wall time for every real session;
+  /// a replay swaps in its own for the session's lifetime so a warmed-up playback writes a timeline
+  /// that agrees with itself. Never read directly — go through `nowMs()`.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `sessionClock`
+  private var sessionClock: SessionClock = SystemSessionClock.shared
   private let connectTimeoutSeconds = 20.0
   /// Board-ready watchdog: max time in `waitingForTelemetry` (GATT subscribed) before the board is
   /// presumed silent and we self-heal via reconnect. Mirrors Android `armBoardReadyTimeout`.
@@ -230,6 +235,9 @@ internal final class BoardSessionController: VescGattListener {
     // no such step — `gatt.connect` clears its own previous peripheral.
     if replay != nil { gatt.disconnect() }
     replayTransport = replay
+    // A replay owns the session's notion of time for its lifetime. Installed here, with the
+    // transport, so it cannot be undone by the teardown of the session being replaced.
+    sessionClock = replay?.clock ?? SystemSessionClock.shared
     gatt.recorder = { [weak self] in self?.recordingCoordinator.currentRecorder() }
     batteryEstimator.ensureLoaded()
     liveSeries.emit = { [weak self] name, body in self?.emit?(name, body) }
@@ -288,7 +296,8 @@ internal final class BoardSessionController: VescGattListener {
       replay: ReplayTransport(
         recordingName: recordingName,
         listener: self,
-        onLocation: { [weak self] fix in self?.onReplayLocation(fix) }
+        onLocation: { [weak self] fix in self?.onReplayLocation(fix) },
+        clock: ReplayClock()
       ),
       onSuccess: onSuccess,
       onError: onError
@@ -621,6 +630,9 @@ internal final class BoardSessionController: VescGattListener {
     alertCoordinator.stopAllGeiger()
     transport.disconnect()
     replayTransport = nil
+    // The shifted clock belongs to the replay that installed it; anything running between here and
+    // the next session must not still be reading time from the past.
+    sessionClock = SystemSessionClock.shared
     reassembler.reset()
     connectedBoardId = nil
     bleId = nil
@@ -770,6 +782,9 @@ internal final class BoardSessionController: VescGattListener {
     alertCoordinator.stopAllGeiger()
     transport.disconnect()
     replayTransport = nil
+    // The shifted clock belongs to the replay that installed it; anything running between here and
+    // the next session must not still be reading time from the past.
+    sessionClock = SystemSessionClock.shared
     endLiveActivity()
     emit?("onError", ["message": message])
     setPhase(.error)
@@ -1426,7 +1441,7 @@ internal final class BoardSessionController: VescGattListener {
         bearingDeg: fix.bearingDeg,
         accuracyM: fix.accuracyM,
         altitudeM: fix.altitudeM,
-        timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+        timestamp: nowMs(),
         precise: isPreciseGpsFix(accuracyM: fix.accuracyM)
       )
     )
@@ -1661,7 +1676,8 @@ internal final class BoardSessionController: VescGattListener {
     lastPollAt > 0 ? Int(max(0, now - lastPollAt)) : nil
   }
 
-  private func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+  /// - SeeAlso: `SessionClock`
+  private func nowMs() -> Int64 { sessionClock.nowMs() }
   private func elapsedMs() -> Int64 { Int64(ProcessInfo.processInfo.systemUptime * 1000.0) }
 }
 

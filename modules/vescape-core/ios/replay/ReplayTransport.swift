@@ -5,8 +5,11 @@ private let replayEndTailSeconds = 0.25
 
 /// Dev-mode `SessionTransport` that plays a Debug Recording through the real session stack
 /// (ADR 0024): fakes the connect/subscribing/ready callbacks, emits recorded `rx` chunks *and*
-/// recorded GPS fixes at their recorded `t` offsets at 1× real time on one merged timeline,
-/// swallows writes, and ends the session like a real disconnect when the recording runs out.
+/// recorded GPS fixes at their recorded `t` offsets on one merged timeline, swallows writes, and
+/// ends the session like a real disconnect when the recording runs out.
+/// The first `replayWarmupMs` of the recording plays as fast as it decodes, against a `ReplayClock`
+/// that starts that far in the past, so the session comes up with its live window already filled
+/// instead of spending real minutes waiting for one; the remainder plays at 1× real time.
 /// Replaying a ride means reproducing where it happened, so the recording owns position for the
 /// whole session; a recording without `location` lines replays like ordinary use without a GPS fix. `supportsReconnect == false` keeps the controller's
 /// reconnect loop out of replay: the recording ending is terminal.
@@ -32,15 +35,26 @@ internal final class ReplayTransport: SessionTransport {
   private weak var listener: VescGattListener?
   private let recordingName: String
   private let onLocation: (ReplayLocation) -> Void
+  /// The session clock this playback drives; installed by the controller for the session.
+  let clock: ReplayClock
+  private let warmupMs: Int64
   private var cancelled = false
-  private var playbackStartedAt = DispatchTime.now()
+  private var playbackStartedAtMs: Int64 = 0
 
   var supportsReconnect: Bool { false }
 
-  init(recordingName: String, listener: VescGattListener, onLocation: @escaping (ReplayLocation) -> Void) {
+  init(
+    recordingName: String,
+    listener: VescGattListener,
+    onLocation: @escaping (ReplayLocation) -> Void,
+    clock: ReplayClock,
+    warmupMs: Int64 = replayWarmupMs
+  ) {
     self.recordingName = recordingName
     self.listener = listener
     self.onLocation = onLocation
+    self.clock = clock
+    self.warmupMs = warmupMs
   }
 
   func connect(peripheralId: String) {
@@ -70,14 +84,14 @@ internal final class ReplayTransport: SessionTransport {
     listener?.onGattConnected()
     listener?.onGattSubscribing()
     listener?.onGattReady()
-    playbackStartedAt = DispatchTime.now()
+    playbackStartedAtMs = Int64(Date().timeIntervalSince1970 * 1000)
     scheduleNext(events, index: 0)
   }
 
   /// Cursor-based pacing: only the next event is ever scheduled, so an hour-long recording never
   /// floods the main queue with queued callbacks. Recorded `t` is relative to recording start;
-  /// scheduling against `playbackStartedAt` preserves the original absolute pacing (including the
-  /// recorded connect handshake gap) at 1× real time.
+  /// scheduling against the session clock preserves the original absolute pacing (including the
+  /// recorded connect handshake gap) at 1× real time, once past the warmup window.
   private func scheduleNext(_ events: [ReplayEvent], index: Int) {
     guard !cancelled else { return }
     guard index < events.count else {
@@ -99,8 +113,17 @@ internal final class ReplayTransport: SessionTransport {
   }
 
   private func schedule(atRecordedMs recordedMs: Int64, _ block: @escaping () -> Void) {
-    let deadline = playbackStartedAt + Double(recordedMs) / 1000.0
-    DispatchQueue.main.asyncAfter(deadline: max(deadline, .now())) { [weak self] in
+    // Warmup dispatches one event per queue hop with no delay. The cursor is what keeps that
+    // bounded — enqueueing the whole window at once would starve the main queue the session needs
+    // in order to process what is being dispatched into it.
+    if recordedMs < warmupMs {
+      clock.advanceWarmup(recordedT: recordedMs, playbackStartedAtMs: playbackStartedAtMs)
+    }
+    // Pace against the session clock, not wall time: the two agree exactly at 1×, and once the
+    // clock freezes at the end of warmup this keeps playback resuming from the warmup boundary
+    // rather than sleeping out the window the warmup just skipped.
+    let delayMs = max(0, playbackStartedAtMs - warmupMs + recordedMs - clock.nowMs())
+    DispatchQueue.main.asyncAfter(deadline: .now() + Double(delayMs) / 1000.0) { [weak self] in
       guard let self, !self.cancelled else { return }
       block()
     }

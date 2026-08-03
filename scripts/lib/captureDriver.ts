@@ -18,10 +18,10 @@ export const FIXTURE_ZIP = join(ROOT, 'shared', 'fixtures', 'screenshot-db.zip')
 /**
  * Where the capture run pretends to be: Wrocław old town.
  *
- * The recording carries GPS fixes, but replay drops them — `ReplayChunkDecoder` keeps only
- * `ble-chunk`/`rx` lines — so the map position still comes entirely from the device. Left alone,
- * iOS sits on the simulator default (San Francisco) and the emulator on its own, and the two store
- * sets stop being comparable.
+ * Replay owns position once it starts — the recording's GPS fixes replay alongside its chunks — but
+ * the device still decides where the map sits until the first replayed fix lands. Left alone, iOS
+ * boots on the simulator default (San Francisco) and the emulator on its own, and the two store sets
+ * stop being comparable.
  */
 export const CAPTURE_LOCATION = { latitude: 51.1079, longitude: 17.0385 }
 

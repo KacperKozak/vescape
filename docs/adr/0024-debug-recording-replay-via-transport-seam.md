@@ -9,8 +9,9 @@ replayable.
 ## Decision
 
 Replay injects recorded chunks at the **transport seam** (`VescGattListener` / iOS peer): a
-`ReplayTransport` fakes the connect/ready callbacks, emits recorded `rx` chunks at their recorded
-`t` (1× real time), and swallows writes. Everything above the seam — packet reassembly, telemetry
+`ReplayTransport` fakes the connect/ready callbacks, emits recorded `rx` chunks and recorded GPS
+fixes at their recorded `t` on one merged timeline, and swallows writes. Playback is 1× real time
+past the warmup window described below; the recording owns position for the whole session. Everything above the seam — packet reassembly, telemetry
 pipeline, BMS pipe, warning detectors, recording, live state, JS UI — runs unmodified and cannot
 tell replay from a live board.
 
@@ -35,11 +36,26 @@ so both platforms record and replay.
 - **Detector-level mock feeding only** (no transport seam, hand-built frames). Rejected as the only
   mechanism: it cannot validate against real noise/timing, which is the whole false-positive story.
   It survives as the transform-lambda layer on top of replayed real frames.
-- **Virtual clock for fast-forward replay.** Rejected for v1: controller and detectors read wall
-  clock in many places; injecting a clock everywhere is a large refactor. UI replay is 1× only;
-  unit tests bypass wall clock by passing recorded `t` directly.
+- **Fast-forward replay with no clock injection.** Rejected: live series bucket samples by the
+  timestamp each carries, so playing fast against wall time compresses a window's worth of ride into
+  seconds of chart instead of filling it. Superseded by the session clock below, which shifts time
+  rather than compressing it.
 - **Full-real board id for UI replay.** Rejected: pollutes Ride History and warning stores of real
   boards; synthetic id keeps end-to-end write paths exercised while staying cleanable.
+
+### Session clock and replay warmup
+
+A replay opens with its live window already filled rather than spending real minutes earning one.
+The session reads time through a `SessionClock` (`@parity` pair) instead of the system clock: real
+sessions get wall time unchanged, a replay gets a clock that starts one warmup window in the past
+and is driven forward as the warmup plays, freezing once it catches up. The first `REPLAY_WARMUP_MS`
+of the recording is then dispatched as fast as it decodes, and its samples land stamped across the
+span they actually cover.
+
+The original objection — that the controller reads wall clock in many places — is what the clock
+addresses rather than works around: every one of those reads goes through one session-scoped seam,
+so the timeline a session writes always agrees with the code reading it. Unit replay harnesses are
+unaffected; they still pass recorded `t` directly.
 
 ## Consequences
 
