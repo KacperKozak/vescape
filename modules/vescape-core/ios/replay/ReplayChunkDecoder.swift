@@ -6,11 +6,26 @@ internal struct ReplayChunk {
   let bytes: [UInt8]
 }
 
+/// One recorded GPS fix, replayed in place of the phone's own. A replay reproduces the ride that was
+/// recorded, and position is the centre of that ride — so the recording owns it outright.
+///
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/replay/ReplayChunkDecoder.kt `ReplayLocation`
+internal struct ReplayLocation {
+  let t: Int64
+  let latitude: Double
+  let longitude: Double
+  let speedMps: Double?
+  let bearingDeg: Double?
+  let accuracyM: Double?
+  let altitudeM: Double?
+}
+
 /// Pure decode core for Debug Recording replay (ADR 0024): turns a `.jsonl` Debug Recording into the
 /// byte stream and decoded frames the session stack originally saw. Shared by the unit replay
-/// harness (test source) and the dev-mode ReplayTransport. Only `ble-chunk` lines with
-/// `direction == "rx"` matter for replay; every other kind (meta, session-state, location, tx
-/// traffic) and any malformed line — real recordings can end mid-write — is skipped, never fatal.
+/// harness (test source) and the dev-mode ReplayTransport. `ble-chunk` lines with
+/// `direction == "rx"` carry the board stream and `location` lines carry the ride's GPS track;
+/// every other kind (meta, session-state, tx traffic) and any malformed line — real recordings can
+/// end mid-write — is skipped, never fatal.
 ///
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/replay/ReplayChunkDecoder.kt
 internal enum ReplayChunkDecoder {
@@ -27,6 +42,29 @@ internal enum ReplayChunkDecoder {
         let bytes = Data(base64Encoded: base64)
       else { return nil }
       return ReplayChunk(t: t, bytes: [UInt8](bytes))
+    }
+  }
+
+  /// Recorded GPS fixes in file order with their recorded time offsets.
+  static func locations(_ jsonl: String) -> [ReplayLocation] {
+    jsonl.split(separator: "\n").compactMap { line in
+      guard
+        let data = line.data(using: .utf8),
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+        json["kind"] as? String == "location",
+        let t = (json["t"] as? NSNumber)?.int64Value,
+        let latitude = (json["latitude"] as? NSNumber)?.doubleValue,
+        let longitude = (json["longitude"] as? NSNumber)?.doubleValue
+      else { return nil }
+      return ReplayLocation(
+        t: t,
+        latitude: latitude,
+        longitude: longitude,
+        speedMps: (json["speedMps"] as? NSNumber)?.doubleValue,
+        bearingDeg: (json["bearingDeg"] as? NSNumber)?.doubleValue,
+        accuracyM: (json["accuracyM"] as? NSNumber)?.doubleValue,
+        altitudeM: (json["altitudeM"] as? NSNumber)?.doubleValue
+      )
     }
   }
 

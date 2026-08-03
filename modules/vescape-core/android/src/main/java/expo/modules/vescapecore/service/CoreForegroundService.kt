@@ -143,12 +143,19 @@ class CoreForegroundService : Service() {
         }
 
         fun stopBoardSession(context: Context, onSuccess: () -> Unit = {}) {
+            val service = instance
+            if (service == null) {
+                // No service, no session: settle the promise instead of reviving it just to stop.
+                pendingStop = null
+                onSuccess()
+                return
+            }
             pendingStop = PendingStop(onSuccess)
             val intent = Intent(context, CoreForegroundService::class.java).apply {
                 action = ACTION_STOP_SESSION
             }
             context.startService(intent)
-            instance?.controller?.consumePendingStop()
+            service.controller.consumePendingStop()
         }
 
         fun exitApp(context: Context) {
@@ -241,13 +248,22 @@ class CoreForegroundService : Service() {
             instance?.controller?.consumePendingGpsStart()
         }
 
+        /**
+         * Stopping something that is not running must not *create* the service. A start intent
+         * revives a dead service, and a revived service whose only work is a stop goes straight
+         * back to `stopSelf()` — if Android was still waiting on a `startForeground()` from an
+         * overlapping foreground start, that teardown kills the process with
+         * ForegroundServiceDidNotStartInTimeException. No instance ⇒ no GPS monitoring ⇒ nothing
+         * to stop.
+         */
         fun stopGpsMonitoring(context: Context) {
             pendingGpsStart = false
+            val service = instance ?: return
             val intent = Intent(context, CoreForegroundService::class.java).apply {
                 action = ACTION_STOP_GPS_MONITORING
             }
             context.startService(intent)
-            instance?.controller?.stopGpsMonitoring()
+            service.controller.stopGpsMonitoring()
         }
 
         fun startGroupRideObserve(context: Context, url: String) {
@@ -264,11 +280,12 @@ class CoreForegroundService : Service() {
 
         fun stopGroupRideObserve(context: Context) {
             pendingGroupRideUrl = null
+            val service = instance ?: return
             val intent = Intent(context, CoreForegroundService::class.java).apply {
                 action = ACTION_STOP_GROUP_RIDE_OBSERVE
             }
             context.startService(intent)
-            instance?.controller?.stopGroupRideObserve()
+            service.controller.stopGroupRideObserve()
         }
 
         /** Create a Group Ride over the live observe socket. No-op when the service is not running. */

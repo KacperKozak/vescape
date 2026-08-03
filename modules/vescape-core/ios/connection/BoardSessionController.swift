@@ -279,7 +279,11 @@ internal final class BoardSessionController: VescGattListener {
     )
     connect(
       config: config,
-      replay: ReplayTransport(recordingName: recordingName, listener: self),
+      replay: ReplayTransport(
+        recordingName: recordingName,
+        listener: self,
+        onLocation: { [weak self] fix in self?.onReplayLocation(fix) }
+      ),
       onSuccess: onSuccess,
       onError: onError
     )
@@ -348,7 +352,12 @@ internal final class BoardSessionController: VescGattListener {
   func recordingPaused() -> Bool { idlePauseDetector.isPaused }
   func recordingActiveBoardId() -> String? { recordingCoordinator.activeBoardId }
 
+  /// The one place the phone's GPS is armed. A replay owns position for its whole session, so the
+  /// guard lives here rather than at the call sites: the map, the settings toggle and the session
+  /// start all ask for location updates independently, and a single live fix slipping through is
+  /// enough to make the marker jump off the recorded track.
   func startLocationUpdates() {
+    guard replayTransport == nil else { return }
     gpsError = gpsMonitor.start()
     onStateChanged?()
   }
@@ -535,7 +544,7 @@ internal final class BoardSessionController: VescGattListener {
     // failing store site (mirrors Android clearing `warningFailuresReported`). Keeps warning-path
     // failures non-fatal and reported without per-frame spam.
     BoardWarningFailureReporter.shared.beginSession()
-    gpsError = gpsMonitor.start()
+    if replayTransport == nil { gpsError = gpsMonitor.start() }
     // Fresh rule set for this session's alert engine — only the connected Board's enabled rules
     // (mirrors Android loadAlertRules on connect).
     let board = appData.getBoard(config.appBoardId)
@@ -1395,6 +1404,25 @@ internal final class BoardSessionController: VescGattListener {
       canId: canId,
       telemetry: telemetry,
       location: latestPreciseLocation
+    )
+  }
+
+  /// Feed a recorded fix into the same path a live one takes, so everything downstream — map,
+  /// trail, ride stats, Group Ride presence — sees the ride exactly as it happened.
+  ///
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `onReplayLocation`
+  private func onReplayLocation(_ fix: ReplayLocation) {
+    onLocationUpdated(
+      TelemetryLocationCapture(
+        latitude: fix.latitude,
+        longitude: fix.longitude,
+        speedMps: fix.speedMps,
+        bearingDeg: fix.bearingDeg,
+        accuracyM: fix.accuracyM,
+        altitudeM: fix.altitudeM,
+        timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+        precise: isPreciseGpsFix(accuracyM: fix.accuracyM)
+      )
     )
   }
 
