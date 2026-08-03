@@ -930,7 +930,7 @@ private var wearAutoLaunchOnConnect = true
         telemetry = null
         latestBatterySoc = null
         latestDutyExcluded = false
-        loadBatteryConfig(start.boardConfig.appBoardId)
+        loadBatteryConfig(start.boardConfig)
         socWindow.reset()
         bmsSeriesRing.clear()
         cellSpreadDetector.reset()
@@ -2214,14 +2214,29 @@ private var wearAutoLaunchOnConnect = true
         }
     }
 
-    private fun loadBatteryConfig(appBoardId: String?) {
+    /**
+     * Resolve the pack config the SoC estimator reads for this session.
+     *
+     * iOS resolves the same fallback when it builds the replay `BoardConnectConfig`.
+     * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `startReplay`
+     */
+    private fun loadBatteryConfig(config: SessionConfig?) {
+        val appBoardId = config?.appBoardId
         if (appBoardId == null) {
             batteryConfigCache = null
             return
         }
         batteryConfigCache = try {
             val board = kotlinx.coroutines.runBlocking {
-                AppDataRepository.get(service.applicationContext).getBoard(appBoardId)
+                val repo = AppDataRepository.get(service.applicationContext)
+                repo.getBoard(appBoardId)
+                    // A replay session runs under a synthetic `replay:` board id, which has no board
+                    // row and therefore no pack config — the SoC estimate would stay null for the
+                    // whole playback and the battery bar would read nothing. The recording is a ride
+                    // of a real board, so borrow the selected board's pack to size it.
+                    ?: config.replayRecordingName?.let {
+                        repo.getTypedSettings().selectedBoardId?.let { id -> repo.getBoard(id) }
+                    }
             }
             board?.get("batteryConfig") as? Map<String, Any?>
         } catch (e: kotlinx.coroutines.CancellationException) {

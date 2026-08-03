@@ -263,6 +263,12 @@ internal final class BoardSessionController: VescGattListener {
     let baseName = recordingName.hasSuffix(".jsonl") ? String(recordingName.dropLast(6)) : recordingName
     let replayBoardId = "replay:" + baseName
     let settings = appData.getSettings()
+    // The synthetic `replay:` board id has no board row and therefore no pack config, so the SoC
+    // estimate would stay nil for the whole playback and the battery bar would read nothing. The
+    // recording is a ride of a real board: borrow the selected board's pack to size it.
+    let replayBatteryConfig = (settings["selectedBoardId"] as? String)
+      .flatMap { appData.getBoard($0) }
+      .flatMap { AppDataRepository.normalizeBatteryConfig($0["batteryConfig"] ?? nil) }
     let config = BoardConnectConfig(
       appBoardId: replayBoardId,
       bleId: replayBoardId,
@@ -274,7 +280,7 @@ internal final class BoardSessionController: VescGattListener {
       refloatVersion: nil,
       refloatBaseVersion: nil,
       pollIntervalMs: (meta?["pollIntervalMs"] as? NSNumber)?.intValue ?? 0,
-      batteryConfig: nil,
+      batteryConfig: replayBatteryConfig,
       liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5
     )
     connect(
