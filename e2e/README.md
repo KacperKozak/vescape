@@ -104,9 +104,9 @@ for overlay view states. Anything genuinely platform-specific lives in `scripts/
 and `scripts/lib/iosCapture.ts` behind the `CaptureDriver` contract, not in a second flow set.
 
 Both runs pin the device to Wrocław old town (`CAPTURE_LOCATION`): `xcrun simctl location set` on
-iOS, `adb emu geo fix` on an Android emulator. The replay recording is BLE-only and carries no GPS
-fix, so without this the map backdrop is whatever default each platform boots with and the two sets
-stop being comparable. A physical Android device keeps its own location — mocking it would mean
+iOS, `adb emu geo fix` on an Android emulator. The recording has GPS fixes but replay drops them
+(only `ble-chunk`/`rx` is replayed), so without this the map backdrop is whatever default each
+platform boots with and the two sets stop being comparable. A physical Android device keeps its own location — mocking it would mean
 installing a provider app.
 
 iOS captures on an **iPhone 17 Pro Max simulator** (1320x2868, the 6.9" size App Store Connect
@@ -130,8 +130,16 @@ Data comes from two existing mechanisms, no new native code:
   `restoreDatabase` on startup — Room on Android, GRDB on iOS, already `@parity` peers.
 - live (home hero panel): `startDebugReplay` at 1x through the real telemetry pipeline.
 
-Both `screenshots/` and the fixture zip are gitignored. Without the zip the run still works, with
-empty history.
+`screenshots/` is gitignored; the fixture zip is committed. It is generated from a real backup by
+
+```sh
+bun run scripts/sanitize-db-fixture.ts <backup.zip> [--rides 2]
+```
+
+which keeps the last rides, drops diagnostics, Privacy Zones, Board Warnings, favorites and every
+other board, renames the board/tunes/rider and the device MAC, then rebases every timestamp so the
+newest ride reads as today. Re-run it when the dates look stale. Without the zip the run still
+works, with empty history.
 
 Fixture names travel as build-time env (`EXPO_PUBLIC_SCREENSHOTS_REPLAY`, `EXPO_PUBLIC_SCREENSHOTS_DB`)
 rather than a manifest file the app reads. On Android `expo-file-system` sandboxes paths outside the

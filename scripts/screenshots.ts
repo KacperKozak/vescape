@@ -35,6 +35,7 @@ const FLOWS_DIR = join(ROOT, 'e2e', 'flows', 'screenshots')
 
 const PLATFORMS: CapturePlatform[] = ['android', 'ios']
 
+/** 13-minute city ride: long enough to outlast a whole capture run at 1x. */
 const DEFAULT_REPLAY = 'replay-thor301.jsonl'
 /** `AppSettings.liveHistoryLimit` default — the sparkline window the hero panel has to fill. */
 const DEFAULT_SPARKLINE_MINUTES = 5
