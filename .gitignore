@@ -70,10 +70,10 @@ modules/vescape-core/*.swiftdeps
 # perf harness output
 perf-results/
 
-# store screenshot harness output + its local fixture database. Anchored: an unanchored
-# `screenshots/` also swallows `e2e/flows/screenshots/`, the flow set itself.
+# store screenshot harness output. Anchored: an unanchored `screenshots/` also swallows
+# `e2e/flows/screenshots/`, the flow set itself. (The fixture database is committed now —
+# `scripts/sanitize-db-fixture.ts` strips a real backup down to what may be published.)
 /screenshots/
-shared/fixtures/screenshot-db.zip
 
 # fastlane build reports (generated, not source)
 fastlane/report.xml
