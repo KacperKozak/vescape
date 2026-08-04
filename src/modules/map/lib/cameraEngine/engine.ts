@@ -55,6 +55,8 @@ export interface CameraEngineConfig {
   /** Injectable for tests. Defaults to requestAnimationFrame. */
   scheduleFrame?: (callback: (timestampMs: number) => void) => number
   cancelFrame?: (handle: number) => void
+  /** Injectable for tests. Milliseconds clock used to time `driveExternal` samples. */
+  now?: () => number
 }
 
 export interface CameraEngineOmega {
@@ -116,8 +118,12 @@ export interface CameraEngine {
    * shadow-track position and velocity so the next setTarget blends out of the
    * gesture without a jump. Does not call applyFrame — the driver already owns
    * the camera.
+   *
+   * Omit `dtSeconds` to have the engine time the samples itself — gesture
+   * callbacks do not arrive at frame rate, and a wrong dt scales the release
+   * velocity. The first sample after any retarget carries no velocity.
    */
-  driveExternal: (camera: EngineCamera, dtSeconds: number) => void
+  driveExternal: (camera: EngineCamera, dtSeconds?: number) => void
   /** Halt in place: park every spring where it is, kill velocity, stop the loop. */
   stop: () => void
   /** True while the frame loop is running. */
@@ -148,7 +154,15 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
   let pitchFollowsZoom = config.derivePitch != null
   let frameHandle: number | null = null
   let lastFrameMs: number | null = null
+  /** Timestamp of the previous `driveExternal` sample; null starts a new drive. */
+  let lastDriveMs: number | null = null
+  /**
+   * True while applyFrame runs. The map answers a camera write with a change
+   * event, and that echo must not be mistaken for an external driver.
+   */
+  let emitting = false
   let destroyed = false
+  const now = config.now ?? (() => Date.now())
 
   const toCamera = (s: EngineSprings): EngineCamera => ({
     centerCoordinate: [s.lng.x, s.lat.x],
@@ -181,6 +195,15 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
     springSettled(s.heading, ANGLE_EPSILON_DEG, ANGLE_EPSILON_DEG) &&
     springSettled(s.pitch, ANGLE_EPSILON_DEG, ANGLE_EPSILON_DEG) &&
     s.padding.every((p) => springSettled(p, PADDING_EPSILON_PX, PADDING_EPSILON_PX))
+
+  const emit = (s: EngineSprings) => {
+    emitting = true
+    try {
+      config.applyFrame(toCamera(s))
+    } finally {
+      emitting = false
+    }
+  }
 
   const stopLoop = () => {
     if (frameHandle != null) cancelFrame(frameHandle)
@@ -221,7 +244,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
       s.pitch = retargetSpring(s.pitch, config.derivePitch(s.zoom.x))
     }
     springs = s
-    config.applyFrame(toCamera(s))
+    emit(s)
 
     if (settled(s)) {
       // Land exactly on target so the map doesn't rest epsilon off.
@@ -233,7 +256,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
         pitch: snapSpring(s.pitch, s.pitch.target),
         padding: s.padding.map((p) => snapSpring(p, p.target)) as EngineSprings['padding'],
       }
-      config.applyFrame(toCamera(springs))
+      emit(springs)
       lastFrameMs = null
       return
     }
@@ -260,6 +283,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
 
   const reset = (camera: EngineCamera) => {
     stopLoop()
+    lastDriveMs = null
     zoomUserTarget = camera.zoomLevel
     const padding = camera.padding
     springs = {
@@ -276,6 +300,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
 
   const snap = (target: CameraEngineTarget) => {
     if (!springs) return
+    lastDriveMs = null
     const s = springs
     if (target.zoom != null) zoomUserTarget = target.zoom
     const zoomTarget = target.zoom ?? zoomUserTarget
@@ -291,12 +316,13 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
       pitch: pitchTarget != null ? snapSpring(s.pitch, pitchTarget) : s.pitch,
       padding: eachPadding(s, target.padding, snapSpring),
     }
-    config.applyFrame(toCamera(springs))
+    emit(springs)
     ensureLoop()
   }
 
   const setTarget = (target: CameraEngineTarget) => {
     if (!springs) return
+    lastDriveMs = null
     if (target.center) {
       const from = { longitude: springs.lng.x, latitude: springs.lat.x }
       const to = { longitude: target.center[0], latitude: target.center[1] }
@@ -323,26 +349,37 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
     ensureLoop()
   }
 
-  const driveExternal = (camera: EngineCamera, dtSeconds: number) => {
+  const driveExternal = (camera: EngineCamera, dtSeconds?: number) => {
+    if (emitting) return
     if (!springs) {
       reset(camera)
       return
     }
     stopLoop()
+    const sampleMs = now()
+    const dt =
+      dtSeconds ??
+      (lastDriveMs == null ? 0 : Math.min((sampleMs - lastDriveMs) / 1000, MAX_FRAME_DT_S))
+    lastDriveMs = sampleMs
+    // The opening sample of a drive has no measurable velocity; parking on it
+    // beats inheriting whatever the spring was doing before the gesture.
+    const drive = (spring: SpringState, x: number) =>
+      dt > 0 ? driveSpring(spring, x, dt) : snapSpring(spring, x)
     zoomUserTarget = camera.zoomLevel
     const s = springs
     springs = {
-      lng: driveSpring(s.lng, camera.centerCoordinate[0], dtSeconds),
-      lat: driveSpring(s.lat, camera.centerCoordinate[1], dtSeconds),
-      zoom: driveSpring(s.zoom, camera.zoomLevel, dtSeconds),
-      heading: driveSpring(s.heading, nearestBearingTarget(s.heading.x, camera.heading), dtSeconds),
-      pitch: driveSpring(s.pitch, camera.pitch, dtSeconds),
-      padding: eachPadding(s, camera.padding, (spring, x) => driveSpring(spring, x, dtSeconds)),
+      lng: drive(s.lng, camera.centerCoordinate[0]),
+      lat: drive(s.lat, camera.centerCoordinate[1]),
+      zoom: drive(s.zoom, camera.zoomLevel),
+      heading: drive(s.heading, nearestBearingTarget(s.heading.x, camera.heading)),
+      pitch: drive(s.pitch, camera.pitch),
+      padding: eachPadding(s, camera.padding, drive),
     }
   }
 
   const stop = () => {
     stopLoop()
+    lastDriveMs = null
     if (!springs) return
     const s = springs
     springs = {
@@ -362,7 +399,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
     snap,
     driveExternal,
     stop,
-    isAnimating: () => frameHandle != null,
+    isAnimating: () => frameHandle != null || emitting,
     getCamera: () => {
       if (!springs) throw new Error('CameraEngine.getCamera called before reset')
       return toCamera(springs)

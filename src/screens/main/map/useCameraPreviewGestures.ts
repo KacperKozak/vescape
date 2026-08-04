@@ -17,7 +17,6 @@ interface UseCameraPreviewGesturesParams {
   cameraFix: GpsFix | null
   followGps: boolean
   gpsCamera: Pick<CameraSnapshot, 'centerCoordinate' | 'zoomLevel'>
-  gpsHeadingMode: boolean
   historyActive: boolean
   perspectiveEnabled: boolean
   applyLiveFollowCamera: () => void
@@ -33,7 +32,6 @@ export function useCameraPreviewGestures({
   cameraFix,
   followGps,
   gpsCamera,
-  gpsHeadingMode,
   historyActive,
   perspectiveEnabled,
   applyLiveFollowCamera,
@@ -43,18 +41,18 @@ export function useCameraPreviewGestures({
   setFollowGps,
   setFollowZoomLevel,
 }: UseCameraPreviewGesturesParams) {
-  const { cameraRef, currentCameraRef, engine, lastFollowKeyRef } = cameraRefs
+  const { cameraRef, currentCameraRef, engine, lastFollowKeyRef, previewPanActiveRef } = cameraRefs
   const previewPanBaseRef = useRef<CameraSnapshot | null>(null)
   const previewPanCameraRef = useRef<CameraSnapshot | null>(null)
   const previewZoomBaseRef = useRef<CameraSnapshot | null>(null)
-  const previewPanActiveRef = useRef(false)
+  /** Whether the drag started from live follow, so a cancel returns to the live camera. */
+  const previewPanFollowedRef = useRef(false)
   const imperativeHandleLatest = {
     applyLiveFollowCamera,
     followGps,
     getFollowHeadingDeg,
     getLiveFollowCamera,
     gpsCamera,
-    gpsHeadingMode,
     historyActive,
     perspectiveEnabled,
     setFollowGps,
@@ -69,32 +67,23 @@ export function useCameraPreviewGestures({
     const {
       followGps,
       getFollowHeadingDeg,
-      getLiveFollowCamera,
       gpsCamera,
-      gpsHeadingMode,
       historyActive,
       perspectiveEnabled,
       setFollowGps,
     } = imperativeHandleLatestRef.current
     previewPanActiveRef.current = true
     previewPanCameraRef.current = null
-    const baseCamera =
-      followGps && !historyActive
-        ? getLiveFollowCamera()
-        : (currentCameraRef.current ?? {
-            ...gpsCamera,
-            heading: getFollowHeadingDeg(),
-            pitch: getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
-          })
-    previewPanBaseRef.current =
-      followGps && gpsHeadingMode
-        ? {
-            ...baseCamera,
-            heading: getFollowHeadingDeg(),
-          }
-        : baseCamera
+    previewPanFollowedRef.current = followGps && !historyActive
+    // Anchor on what is actually on screen, not on the camera live follow would
+    // like to be at: grabbing the map mid-ride must not teleport it first.
+    previewPanBaseRef.current = currentCameraRef.current ?? {
+      ...gpsCamera,
+      heading: getFollowHeadingDeg(),
+      pitch: getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
+    }
     setFollowGps(false)
-  }, [currentCameraRef])
+  }, [currentCameraRef, previewPanActiveRef])
 
   const previewPanBy = useCallback(
     (deltaX: number, deltaY: number, _animationDuration = 0, revealProgress = 0) => {
@@ -121,15 +110,12 @@ export function useCameraPreviewGestures({
       currentCameraRef.current = previewCamera
       // Engine shadow-tracks the drag so a later release blends out of the
       // gesture's velocity instead of jumping.
-      engine.driveExternal(
-        {
-          centerCoordinate: previewCamera.centerCoordinate,
-          zoomLevel: previewCamera.zoomLevel,
-          heading: previewCamera.heading,
-          pitch: previewCamera.pitch,
-        },
-        1 / 60,
-      )
+      engine.driveExternal({
+        centerCoordinate: previewCamera.centerCoordinate,
+        zoomLevel: previewCamera.zoomLevel,
+        heading: previewCamera.heading,
+        pitch: previewCamera.pitch,
+      })
       cameraRef.current?.setCameraDirect({
         center: previewCamera.centerCoordinate,
         zoom: previewCamera.zoomLevel,
@@ -143,9 +129,14 @@ export function useCameraPreviewGestures({
   const endPreviewPan = useCallback(() => {
     imperativeHandleLatestRef.current.setFollowGps(false)
     previewPanActiveRef.current = false
+    previewPanFollowedRef.current = false
     previewPanBaseRef.current = null
     previewPanCameraRef.current = null
-  }, [])
+    // The drag committed to map mode and nothing retargets right away. Park the
+    // springs here, or the gesture's velocity would fling the next target
+    // whenever it arrives — seconds later.
+    engine.stop()
+  }, [engine, previewPanActiveRef])
 
   const beginPreviewZoom = useCallback(() => {
     const { followGps, getLiveFollowCamera, historyActive } = imperativeHandleLatestRef.current
@@ -173,7 +164,13 @@ export function useCameraPreviewGestures({
   const restorePreviewPan = useCallback(() => {
     previewPanActiveRef.current = false
     enterCameraMode({ kind: 'liveFollow' })
-    const restoreCamera = previewPanBaseRef.current ?? getLiveFollowCamera()
+    // A cancelled drag returns to live follow, so ride back to where the rider
+    // is now — the camera captured at drag start is already stale by a fix or two.
+    const restoreCamera =
+      previewPanFollowedRef.current || !previewPanBaseRef.current
+        ? getLiveFollowCamera()
+        : previewPanBaseRef.current
+    previewPanFollowedRef.current = false
     previewPanBaseRef.current = null
     previewPanCameraRef.current = null
     if (cameraFix) {
@@ -188,7 +185,14 @@ export function useCameraPreviewGestures({
       pitch: restoreCamera.pitch,
       padding: restoreCamera.padding,
     })
-  }, [cameraFix, engine, enterCameraMode, getLiveFollowCamera, lastFollowKeyRef])
+  }, [
+    cameraFix,
+    engine,
+    enterCameraMode,
+    getLiveFollowCamera,
+    lastFollowKeyRef,
+    previewPanActiveRef,
+  ])
 
   return {
     previewPanActiveRef,

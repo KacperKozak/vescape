@@ -25,6 +25,7 @@ export function useMainMapCameraEvents({
   cameraRef,
   currentCameraRef,
   engine,
+  previewPanActiveRef,
   cameraFix,
   gpsCameraCenter,
   followGps,
@@ -55,6 +56,7 @@ export function useMainMapCameraEvents({
   cameraRef: RefObject<Camera | null>
   currentCameraRef: RefObject<CameraSnapshot | null>
   engine: CameraEngine
+  previewPanActiveRef: RefObject<boolean>
   cameraFix: GpsFix | null
   gpsCameraCenter: [number, number]
   followGps: boolean
@@ -152,12 +154,15 @@ export function useMainMapCameraEvents({
         heading: state.properties.heading,
         pitch: state.properties.pitch,
       } satisfies CameraSnapshot
-      currentCameraRef.current = camera
+      // The reveal gesture writes the camera and drives the engine itself; its
+      // echoes arrive a frame late and would only add phantom velocity.
+      const previewPanActive = previewPanActiveRef.current
+      if (!previewPanActive) currentCameraRef.current = camera
       // While a native gesture (or any non-engine mover) owns the camera, the
       // engine shadow-tracks it so its next target blends from here. While the
       // engine itself animates, its own echoes are skipped.
-      if (state.gestures.isGestureActive || !engine.isAnimating()) {
-        engine.driveExternal(camera, 1 / 60)
+      if (!previewPanActive && (state.gestures.isGestureActive || !engine.isAnimating())) {
+        engine.driveExternal(camera)
       }
       repositionOffscreenIndicatorsForCamera(camera)
       const [targetLongitude, targetLatitude] = gpsCameraCenter
@@ -167,7 +172,7 @@ export function useMainMapCameraEvents({
       ) {
         setCameraReady(true)
       }
-      if (mode === 'map' && !(followGps && headingFollowMode)) {
+      if (!previewPanActive && mode === 'map' && !(followGps && headingFollowMode)) {
         const pitch = getPitchForZoom(state.properties.zoom, perspectiveEnabled)
         if (Math.abs(state.properties.pitch - pitch) > 0.5) {
           cameraRef.current?.setCameraDirect({ pitch })
@@ -228,6 +233,7 @@ export function useMainMapCameraEvents({
       mediaAssetCount,
       perspectiveEnabled,
       phoneHeadingMode,
+      previewPanActiveRef,
       repositionOffscreenIndicatorsForCamera,
       setFollowGps,
       setFollowZoomLevel,

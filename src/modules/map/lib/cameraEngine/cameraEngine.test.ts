@@ -72,7 +72,11 @@ const createTestEngine = (options?: { teleportDistanceM?: number }) => {
     cancelFrame: () => {
       pending = null
     },
+    now: () => now,
   })
+  const advance = (ms: number) => {
+    now += ms
+  }
   const tick = (dtMs = 16) => {
     const callback = pending
     pending = null
@@ -82,7 +86,7 @@ const createTestEngine = (options?: { teleportDistanceM?: number }) => {
   const run = (frameCount: number) => {
     for (let i = 0; i < frameCount && pending; i++) tick()
   }
-  return { engine, frames, tick, run, hasPending: () => pending != null }
+  return { engine, frames, tick, run, advance, hasPending: () => pending != null }
 }
 
 const camera = (center: [number, number], zoom = 14, heading = 0, pitch = 0): EngineCamera => ({
@@ -156,6 +160,37 @@ describe('cameraEngine', () => {
     expect(engine.getCamera().centerCoordinate[0]).toBeGreaterThan(21.002)
     run(1000)
     expect(engine.getCamera().centerCoordinate[0]).toBe(21)
+  })
+
+  test('untimed drive measures its own dt, so slow gestures carry less momentum', () => {
+    const release = (sampleGapMs: number) => {
+      const { engine, run, advance } = createTestEngine()
+      engine.reset(camera([21, 52]))
+      for (const longitude of [21.001, 21.002]) {
+        advance(sampleGapMs)
+        engine.driveExternal(camera([longitude, 52]))
+      }
+      engine.setTarget({ center: [21, 52] })
+      run(2)
+      return engine.getCamera().centerCoordinate[0]
+    }
+    // Same drag distance, four times slower: the overshoot past the release
+    // point must shrink with the measured speed.
+    expect(release(16) - 21.002).toBeGreaterThan(release(64) - 21.002)
+  })
+
+  test('first drive sample after a target parks instead of inheriting velocity', () => {
+    const { engine, run, advance } = createTestEngine()
+    engine.reset(camera([21, 52]))
+    engine.setTarget({ center: [21.002, 52] })
+    run(10)
+    // A gesture grabs the flying camera; the opening sample has no velocity of
+    // its own, so releasing it must not continue the old animation.
+    advance(16)
+    engine.driveExternal(camera([21.001, 52]))
+    engine.setTarget({ center: [21.001, 52] })
+    run(2)
+    expect(engine.getCamera().centerCoordinate[0]).toBe(21.001)
   })
 
   test('ballistic transit dips zoom out and returns it on arrival', () => {

@@ -61,6 +61,7 @@ export function useCameraControls({
   const historyPreviewTargetRef = useRef<HistoryPreviewTarget | null>(null)
   const lastFollowKeyRef = useRef<string | null>(null)
   const followZoomLevelRef = useRef<number | null>(null)
+  const previewPanActiveRef = useRef(false)
   const previousGpsHeadingModeRef = useRef(gpsMode && !phoneMode)
   const recenterLiveRef = useRef<
     ((options?: { resetPadding?: boolean; animationDuration?: number }) => void) | null
@@ -93,6 +94,7 @@ export function useCameraControls({
       followZoomLevelRef,
       historyPreviewTargetRef,
       lastFollowKeyRef,
+      previewPanActiveRef,
       engine,
     }),
     [engine],
@@ -282,7 +284,6 @@ export function useCameraControls({
     cameraFix,
     followGps,
     gpsCamera,
-    gpsHeadingMode: gpsMode,
     historyActive,
     perspectiveEnabled,
     applyLiveFollowCamera,
@@ -431,6 +432,7 @@ export function useCameraControls({
     cameraRef,
     currentCameraRef,
     engine,
+    previewPanActiveRef,
     gpsCamera,
     followGps,
     setFollowGps,

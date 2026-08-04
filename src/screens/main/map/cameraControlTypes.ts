@@ -21,6 +21,8 @@ export interface CameraControlRefs {
   followZoomLevelRef: RefObject<number | null>
   historyPreviewTargetRef: RefObject<HistoryPreviewTarget | null>
   lastFollowKeyRef: RefObject<string | null>
+  /** True while the reveal gesture drives the camera itself; map echoes are ignored then. */
+  previewPanActiveRef: RefObject<boolean>
   engine: CameraEngine
 }
 
