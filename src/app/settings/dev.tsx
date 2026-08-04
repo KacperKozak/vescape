@@ -47,6 +47,13 @@ const devPages = [
     iconColor: theme.status.warning.color,
   },
   {
+    label: 'Camera playground',
+    hint: 'Tune the spring camera engine against fake GPS',
+    route: routes.devMapPlayground,
+    icon: CompassIcon,
+    iconColor: theme.palette.violet.color,
+  },
+  {
     label: 'Other',
     hint: 'Small platform probes and local experiments',
     route: routes.settingsOther,

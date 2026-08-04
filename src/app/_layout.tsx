@@ -212,6 +212,10 @@ function RootLayout() {
               name={stackScreens.settingsReleaseNotes}
               options={{ title: 'Release notes' }}
             />
+            <Stack.Screen
+              name={stackScreens.devMapPlayground}
+              options={{ title: 'Camera playground' }}
+            />
             <Stack.Screen name={stackScreens.controlBatteryRaw} options={{ title: 'Raw BMS' }} />
             <Stack.Screen name={stackScreens.tune} options={{ title: 'Tune' }} />
             <Stack.Screen name={stackScreens.tuneHistory} options={{ title: 'Tune History' }} />
