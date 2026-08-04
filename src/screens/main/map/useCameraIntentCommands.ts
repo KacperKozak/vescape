@@ -4,6 +4,7 @@ import { MAP_DEFAULTS } from '@/modules/map/constants/mapStyles'
 import type { MapNavigationMode } from '@/modules/map/constants/mapStyles'
 import { LEGAL_LIMIT_MAP_CAMERA } from '@/modules/legal/lib/legalLimits'
 import type { reduceMapCameraIntent } from '@/modules/map/lib/cameraController'
+import { toEngineTarget } from '@/modules/map/lib/cameraEngine/cameraTarget'
 import { getPitchForZoom } from '@/modules/map/lib/cameraProfiles'
 import { clamp, MIN_ZOOM, type CameraSnapshot } from '@/modules/map/lib/cameraMotion'
 import type { CameraControlRefs } from '@/screens/main/map/cameraControlTypes'
@@ -37,14 +38,9 @@ export function useCameraIntentCommands({
   const applyCamera = useCallback(
     (camera: Partial<CameraSnapshot> | undefined, overrides?: { zoomLevel?: number }) => {
       if (!camera) return
-      const zoomLevel = overrides?.zoomLevel ?? camera.zoomLevel
-      engine.setTarget({
-        ...(camera.centerCoordinate ? { center: camera.centerCoordinate } : {}),
-        ...(zoomLevel != null ? { zoom: zoomLevel } : {}),
-        ...(camera.heading != null ? { heading: camera.heading } : {}),
-        ...(camera.pitch != null ? { pitch: camera.pitch } : {}),
-        ...(camera.padding ? { padding: camera.padding } : {}),
-      })
+      engine.setTarget(
+        toEngineTarget({ ...camera, zoomLevel: overrides?.zoomLevel ?? camera.zoomLevel }),
+      )
     },
     [engine],
   )

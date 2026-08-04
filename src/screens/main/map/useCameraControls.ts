@@ -58,7 +58,6 @@ export function useCameraControls({
   const { updatesEnabled: liveFollowUpdatesEnabled } = follow
   const cameraRef = useRef<CameraRef>(null)
   const currentCameraRef = useRef<CameraSnapshot | null>(null)
-  const historyPreviewTargetRef = useRef<HistoryPreviewTarget | null>(null)
   const lastFollowKeyRef = useRef<string | null>(null)
   const followZoomLevelRef = useRef<number | null>(null)
   const previewPanActiveRef = useRef(false)
@@ -92,7 +91,6 @@ export function useCameraControls({
       currentCameraRef,
       controllerStateRef,
       followZoomLevelRef,
-      historyPreviewTargetRef,
       lastFollowKeyRef,
       previewPanActiveRef,
       engine,
@@ -394,7 +392,6 @@ export function useCameraControls({
       controllerStateRef.current.mode.kind !== 'liveFollow'
     )
       return
-    historyPreviewTargetRef.current = null
     const followCamera = getLiveFollowCamera()
     const nextFollowKey = liveFollowKey(cameraFix.timestamp, followCamera)
     if (lastFollowKeyRef.current === nextFollowKey) return

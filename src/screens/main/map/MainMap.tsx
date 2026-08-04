@@ -336,7 +336,7 @@ export const MainMap = memo(
       ],
     )
     const { handleOffscreenIndicatorPress, handleFocusDirectionPoint } = useMainMapFocusActions({
-      cameraRef,
+      engine,
       currentCameraRef,
       historyActive,
       riderFocusRows,

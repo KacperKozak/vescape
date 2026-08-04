@@ -16,11 +16,6 @@ import type { MainViewState } from '@/screens/main/mainViewState'
 import type { CameraSnapshot, HistoryPreviewTarget } from '@/screens/main/map/useCameraControls'
 import type { GpsFix } from '@/screens/main/map/cameraControlTypes'
 
-type CameraTarget = CameraSnapshot & {
-  animationDuration?: number
-  animationMode?: 'easeTo'
-}
-
 export function useMainMapCameraEvents({
   cameraRef,
   currentCameraRef,
@@ -70,7 +65,7 @@ export function useMainMapCameraEvents({
   mediaAssetCount: number
   mapStyleKey: string
   mapStyleSignature: string
-  getHistoryPreviewCamera: (preview: HistoryPreviewTarget) => CameraTarget
+  getHistoryPreviewCamera: (preview: HistoryPreviewTarget) => CameraSnapshot
   getLiveFollowCamera: () => CameraSnapshot
   setFollowGps: (follow: boolean) => void
   setFollowZoomLevel: (zoom: number) => void
