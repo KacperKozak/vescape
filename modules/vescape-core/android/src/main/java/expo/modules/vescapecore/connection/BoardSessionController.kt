@@ -422,7 +422,6 @@ internal class BoardSessionController(private val service: CoreForegroundService
                 recordName = "reconnecting",
                 recordProperties = mapOf("attempt" to nextAttempt, "status" to gattStatus),
             )
-            presenter.show(reportedBoardPhase())
         }
 
         override fun onScanStart(session: BoardSession) {
@@ -519,6 +518,8 @@ internal class BoardSessionController(private val service: CoreForegroundService
     )
 
     private var boardConfig: SessionConfig? = null
+    /** Held while a teardown runs inside [beginSession] so the idle repaint never flashes over the new session. */
+    private var notificationRepaintSuppressed = false
     /** Name of the currently selected board, shown in the idle notification + gating its Connect action. */
     @Volatile
     private var selectedBoardName: String? = null
@@ -610,7 +611,8 @@ private var wearAutoLaunchOnConnect = true
             val id = repo.getTypedSettings().selectedBoardId
             selectedBoardName = id?.let { repo.getBoard(it)?.get("name") as? String }
             if (boardConfig == null && !isStoppingService) {
-                scheduler.post { if (boardConfig == null && !isStoppingService) presenter.show(reportedBoardPhase()) }
+                // Title/Connect gating changed without a phase change — force past the phase gate.
+                scheduler.post { if (boardConfig == null) refreshNotification(force = true) }
             }
         }
     }
@@ -739,7 +741,7 @@ private var wearAutoLaunchOnConnect = true
         ManualDisconnectAutoStartGate.suppress(service.applicationContext, boardConfig?.appBoardId)
         // Always refresh: the notification stays visible after disconnect (idle + Connect), so it must
         // reflect the idle phase even while GPS keeps the service foregrounded.
-        stopCurrentBoardSession(emitDisconnected = true, updateNotification = true)
+        stopCurrentBoardSession(emitDisconnected = true)
     }
 
     fun onServiceDestroy() {
@@ -774,10 +776,9 @@ private var wearAutoLaunchOnConnect = true
         if (boardConfig != null) {
             setStatus(BoardPhase.Disconnecting)
             ManualDisconnectAutoStartGate.suppress(service.applicationContext, boardConfig?.appBoardId)
-            stopCurrentBoardSession(
-                emitDisconnected = true,
-                updateNotification = !gpsMonitor.active,
-            )
+            // Always refresh, exactly like the notification Disconnect action: the notification
+            // outlives the Board Session (idle + Connect), so a JS disconnect must repaint it too.
+            stopCurrentBoardSession(emitDisconnected = true)
             stop.onSuccess()
             return
         }
@@ -888,7 +889,7 @@ private var wearAutoLaunchOnConnect = true
 
     private fun beginSession(start: PendingStart) {
         isStoppingService = false
-        stopCurrentBoardSession(emitDisconnected = false, updateNotification = false)
+        withNotificationRepaintSuppressed { stopCurrentBoardSession(emitDisconnected = false) }
         refreshLiveHistoryLimit()
         boardConfig = start.boardConfig
         // Load rules only after boardConfig is assigned — the engine scopes to the connected Board's
@@ -1143,7 +1144,6 @@ private var wearAutoLaunchOnConnect = true
             mapOf("message" to "Waiting for board telemetry"),
         )
         transitionBoardPhase(BoardPhase.WaitingForTelemetry)
-        presenter.show(reportedBoardPhase())
         start.onSuccess()
         startPolling()
     }
@@ -1676,7 +1676,6 @@ private var wearAutoLaunchOnConnect = true
         ) return
 
         transitionBoardPhase(BoardPhase.Stale)
-        refreshNotification(force = true)
         boardConfig?.takeIf { it.autoReconnect }?.let {
             scheduleAutoReconnect(it, null, "telemetry stale")
         }
@@ -1738,7 +1737,7 @@ private var wearAutoLaunchOnConnect = true
         return pollingLoop.updateLatency(now)
     }
 
-    private fun stopCurrentBoardSession(emitDisconnected: Boolean, updateNotification: Boolean = true) {
+    private fun stopCurrentBoardSession(emitDisconnected: Boolean) {
         // Final write so the persisted last battery is fresh, not up to 30s stale.
         persistLastBattery(latestBatterySoc, telemetry?.batteryVoltage, System.currentTimeMillis(), force = true)
         remoteTiltController.stop()
@@ -1782,10 +1781,9 @@ private var wearAutoLaunchOnConnect = true
         sessionSequence += 1
         boardConfig = null
         boardError = null
+        // Idle repaint (title + Connect action) rides on the phase transition, like every other
+        // phase change — see [refreshNotification].
         transitionBoardPhase(BoardPhase.Idle)
-        if (updateNotification && !isStoppingService && stoppedConfig != null) {
-            presenter.show(reportedBoardPhase())
-        }
     }
 
     /** Persist the last Battery SoC Estimate per board so it survives full app kill (#152).
@@ -1822,7 +1820,6 @@ private var wearAutoLaunchOnConnect = true
         stopPolling()
         transport.clear(markIntentional = true)
         setError(message)
-        refreshNotification(errorMessage = message, force = true)
         recordingCoordinator.failSession()
         start.onError(code, message)
     }
@@ -1836,6 +1833,9 @@ private var wearAutoLaunchOnConnect = true
         boardStatus = next
         recordName?.let { recordingCoordinator.recordState(it, recordProperties) }
         rescheduleAutoClose()
+        // The notification mirrors the phase, not just telemetry frames: without this a phase change
+        // with no telemetry behind it (connect, reconnect scan, disconnect) leaves the last render up.
+        refreshNotification()
         emitState()
     }
 
@@ -1932,7 +1932,14 @@ private var wearAutoLaunchOnConnect = true
             ),
         )
 
-    fun refreshNotification(
+    /**
+     * Sole repainter of the foreground notification (the [startForeground] build is the same
+     * presenter, one-shot for the Android FGS deadline). Every phase change goes through
+     * [transitionBoardPhase] and lands here, so no caller can leave a stale render up; telemetry
+     * frames and title/action changes call it directly. Keep it private — a new repaint entry point
+     * is how the notification drifts out of sync with the phase.
+     */
+    private fun refreshNotification(
         telemetry: RefloatTelemetry? = this.telemetry,
         batteryPercent: Double? = telemetry?.let {
             BatterySocEstimator.estimateBatteryPercent(it.batteryVoltage, batteryConfigCache, it.batteryCurrent)
@@ -1940,7 +1947,7 @@ private var wearAutoLaunchOnConnect = true
         errorMessage: String? = boardError,
         force: Boolean = false,
     ) {
-        if (isStoppingService) return
+        if (isStoppingService || notificationRepaintSuppressed) return
         val phase = reportedBoardPhase()
         if (!notificationGate.shouldPost(phase, System.currentTimeMillis(), force)) return
         presenter.show(
@@ -1949,6 +1956,16 @@ private var wearAutoLaunchOnConnect = true
             batteryPercent = batteryPercent,
             errorMessage = errorMessage,
         )
+    }
+
+    /** Swallows the repaints of an intermediate teardown whose end state is never rider-visible. */
+    private inline fun withNotificationRepaintSuppressed(block: () -> Unit) {
+        notificationRepaintSuppressed = true
+        try {
+            block()
+        } finally {
+            notificationRepaintSuppressed = false
+        }
     }
 
     private fun emitState() {
