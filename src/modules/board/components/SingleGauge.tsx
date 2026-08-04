@@ -1,13 +1,9 @@
 import type { ReactNode } from 'react'
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
-import {
-  useAnimatedProps,
-  useAnimatedStyle,
-  useDerivedValue,
-  type SharedValue,
-} from 'react-native-reanimated'
+import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 import { Canvas, Group, Path } from '@shopify/react-native-skia'
 
+import { MonoValue } from '@/components/base/MonoValue'
 import { Text } from '@/components/base/Text'
 import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
 import { theme, type AlphaLevel } from '@/constants/theme'
@@ -24,7 +20,6 @@ import {
 } from '@/modules/board/components/gauge/arcGeometry'
 import {
   AlertMarker,
-  AnimatedTextInput,
   BG_ARC_COLOR,
   gaugeRampColor,
   GlowGradient,
@@ -59,6 +54,11 @@ const GLOW_OPACITIES: AlphaLevel[] = [0, 0, 0.12, 0.3]
 
 const BG_ARC = svgPath(arcPath(HALF_ARC, 1))
 
+// Readout box: explicit line height keeps the Skia canvas at the vertical
+// footprint the TextInput's `lineHeight` used to reserve.
+const HALF_VALUE_FONT_SIZE = 52
+const HALF_VALUE_LINE_HEIGHT = 58
+
 function HalfArc({
   value,
   min,
@@ -75,15 +75,10 @@ function HalfArc({
   const scale = size.w > 0 ? size.w / HALF_VB_W : 0
   const labelFont = useSkiaFont('700', LABEL_FONT_SIZE)
 
-  const animatedValueProps = useAnimatedProps(() => {
+  const valueText = useDerivedValue(() => {
     const current = value.value
-    const text =
-      current != null
-        ? decimals === 0
-          ? Math.round(current).toString()
-          : current.toFixed(decimals)
-        : '—'
-    return { text, value: text }
+    if (current == null) return '—'
+    return decimals === 0 ? Math.round(current).toString() : current.toFixed(decimals)
   })
 
   const arc = useDerivedValue(() =>
@@ -99,9 +94,7 @@ function HalfArc({
     return radialTickPath(HALF_ARC, normalizeFraction(value.value, min, max), MARKER_INSET)
   })
 
-  const animatedValueStyle = useAnimatedStyle(() => ({
-    color: gaugeRampColor(value.value, color, hotRange),
-  }))
+  const valueColor = useDerivedValue(() => gaugeRampColor(value.value, color, hotRange))
 
   return (
     <View style={styles.halfWrap}>
@@ -157,10 +150,13 @@ function HalfArc({
 
       {showValue ? (
         <View style={styles.halfBowl} pointerEvents="none">
-          <AnimatedTextInput
-            editable={false}
-            animatedProps={animatedValueProps}
-            style={[styles.halfValue, animatedValueStyle]}
+          <MonoValue
+            text={valueText}
+            size={HALF_VALUE_FONT_SIZE}
+            height={HALF_VALUE_LINE_HEIGHT}
+            color={valueColor}
+            align="center"
+            style={styles.halfValue}
           />
           <Text style={styles.halfUnit}>{unit}</Text>
         </View>
@@ -248,13 +244,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   halfValue: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 52,
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    lineHeight: 58,
-    padding: 0,
-    textAlign: 'center',
+    alignSelf: 'stretch',
   },
   halfUnit: {
     color: theme.palette.slate.textMuted,

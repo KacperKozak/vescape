@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
-import { TextInput, type LayoutChangeEvent } from 'react-native'
-import Animated, { interpolateColor } from 'react-native-reanimated'
+import { type LayoutChangeEvent } from 'react-native'
+import { interpolateColor } from 'react-native-reanimated'
 import {
   Path,
   RadialGradient,
@@ -22,8 +22,6 @@ import {
   STROKE,
   type Arc,
 } from '@/modules/board/components/gauge/arcGeometry'
-
-export const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
 export const BG_ARC_COLOR = theme.palette.slate.border
 const GAUGE_HOT_COLOR = theme.status.error.color

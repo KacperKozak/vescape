@@ -1,11 +1,6 @@
 import { useMemo } from 'react'
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
-import {
-  useAnimatedProps,
-  useAnimatedStyle,
-  useDerivedValue,
-  type SharedValue,
-} from 'react-native-reanimated'
+import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { Canvas, Group, Path } from '@shopify/react-native-skia'
 
@@ -29,9 +24,9 @@ import {
   wedgePath,
   type Arc,
 } from '@/modules/board/components/gauge/arcGeometry'
+import { MonoValue } from '@/components/base/MonoValue'
 import {
   AlertMarker,
-  AnimatedTextInput,
   BG_ARC_COLOR,
   gaugeRampColor,
   GlowGradient,
@@ -63,6 +58,11 @@ const VB_H = 120
 const MARKER_INSET = 10
 const LEFT_ARC: Arc = { cx: 100, cy: 100, r: R, from: Math.PI, to: Math.PI / 2 }
 const RIGHT_ARC: Arc = { cx: 10, cy: 100, r: R, from: 0, to: Math.PI / 2 }
+
+// Readout box: line height is set explicitly so the Skia canvas keeps the same
+// vertical footprint the TextInput's `lineHeight` used to reserve.
+const VALUE_FONT_SIZE = 36
+const VALUE_LINE_HEIGHT = 40
 
 // Cropped viewBox per side — removes empty space so arc fills container width
 const CROP_PAD = 1
@@ -162,23 +162,23 @@ function GaugeValue({
   unit,
   bounds,
 }: QuarterArcProps & { bounds: { top: number; bottom: number } }) {
-  const animatedValueProps = useAnimatedProps(() => {
+  const valueText = useDerivedValue(() => {
     const current = value.value
-    const text = current != null ? Math.round(current).toString() : '—'
-    return { text, value: text }
+    return current != null ? Math.round(current).toString() : '—'
   })
-  const animatedValueStyle = useAnimatedStyle(() => ({
-    color: gaugeRampColor(value.value, color, hotRange),
-  }))
+  const valueColor = useDerivedValue(() => gaugeRampColor(value.value, color, hotRange))
   return (
     <View
       style={[side === 'left' ? styles.bowlLeft : styles.bowlRight, bounds]}
       pointerEvents="none"
     >
-      <AnimatedTextInput
-        editable={false}
-        animatedProps={animatedValueProps}
-        style={[styles.value, animatedValueStyle]}
+      <MonoValue
+        text={valueText}
+        size={VALUE_FONT_SIZE}
+        height={VALUE_LINE_HEIGHT}
+        color={valueColor}
+        align="center"
+        style={styles.value}
       />
       <Text style={styles.unit}>{unit}</Text>
     </View>
@@ -445,13 +445,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   value: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 36,
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    lineHeight: 40,
-    padding: 0,
-    textAlign: 'center',
+    alignSelf: 'stretch',
   },
   unit: {
     color: theme.palette.slate.textMuted,

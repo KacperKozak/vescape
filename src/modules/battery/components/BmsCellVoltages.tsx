@@ -8,7 +8,7 @@ import Animated, {
   type DerivedValue,
   type SharedValue,
 } from 'react-native-reanimated'
-import { AnimatedValueText } from '@/components/base/AnimatedValueText'
+import { MonoValue } from '@/components/base/MonoValue'
 import { Text } from '@/components/base/Text'
 
 import {
@@ -240,9 +240,9 @@ function LiveCellRow({
     const group = summary.value?.groups[index]
     return group ? `${group.voltage.toFixed(3)}V` : ''
   })
-  const voltageStyle = useAnimatedStyle(() => ({
-    color: groupColor(summary.value?.groups[index]?.extreme ?? null),
-  }))
+  const voltageColor = useDerivedValue(() =>
+    groupColor(summary.value?.groups[index]?.extreme ?? null),
+  )
 
   return (
     <View style={styles.row}>
@@ -251,7 +251,13 @@ function LiveCellRow({
         <Animated.View style={[styles.barLine, barStyle]} />
         <Animated.View style={[styles.balanceDot, dotStyle]} />
       </View>
-      <AnimatedValueText text={voltageText} style={[styles.rowValue, voltageStyle]} />
+      <MonoValue
+        text={voltageText}
+        size={ROW_VALUE_FONT_SIZE}
+        color={voltageColor}
+        align="right"
+        width={ROW_VALUE_WIDTH}
+      />
     </View>
   )
 }
@@ -278,7 +284,14 @@ function LiveStat({
   return (
     <View style={styles.stat}>
       <Text style={styles.statLabel}>{label}</Text>
-      <AnimatedValueText text={text} style={[styles.statValue, { color: statColor(tone) }]} />
+      <MonoValue
+        text={text}
+        size={STAT_VALUE_FONT_SIZE}
+        weight="800"
+        color={statColor(tone)}
+        align="center"
+        style={styles.liveStatValue}
+      />
     </View>
   )
 }
@@ -365,6 +378,10 @@ function Stat({
   )
 }
 
+const ROW_VALUE_FONT_SIZE = 9
+const ROW_VALUE_WIDTH = 42
+const STAT_VALUE_FONT_SIZE = 14
+
 const styles = StyleSheet.create({
   container: {
     gap: 12,
@@ -404,10 +421,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
+  liveStatValue: {
+    alignSelf: 'stretch',
+  },
   statValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    fontFamily: 'monospace',
+    fontSize: STAT_VALUE_FONT_SIZE,
+    fontFamily: theme.mono('800'),
   },
   rows: {
     gap: 3,
@@ -443,10 +462,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.palette.green.color,
   },
   rowValue: {
-    fontSize: 9,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-    width: 42,
+    fontSize: ROW_VALUE_FONT_SIZE,
+    fontFamily: theme.mono('700'),
+    width: ROW_VALUE_WIDTH,
     textAlign: 'right',
   },
 })
