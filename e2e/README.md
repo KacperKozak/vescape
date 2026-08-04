@@ -167,7 +167,8 @@ Other flags: `--replay <name>` (default `replay-thor301`), `--no-wait` (skip the
 
 The hero panel is captured last. `TelemetryPipeline.liveSeries` buckets the sparkline over
 `liveHistoryLimit` minutes of receipt timestamps, so filling it takes that much session time. Replay
-warmup covers the first three minutes up front: it plays as fast as it decodes against a clock
-shifted that far into the past, which fills the window instead of compressing the samples into a
-fraction of it (ADR 0024). The run waits out only whatever window is left beyond the warmup. The
-replay recording must be at least as long as the whole run.
+warmup covers the first six minutes up front: it plays at 30× against a clock shifted that far into
+the past, which fills the window instead of compressing the samples into a fraction of it (ADR
+0024). The window is wider than the sparkline's own, so the run waits out nothing beyond the twelve
+seconds the warmup itself costs. The replay recording must be at least as long as the whole run —
+warmup included, since it spends recording too.

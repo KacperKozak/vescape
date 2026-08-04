@@ -8,9 +8,9 @@ import expo.modules.vescapecore.runtime.SessionClock
  *
  * A replay may open with its live window already filled rather than spending real minutes earning
  * one. Dispatching the recording faster is not enough on its own: live series bucket each sample by
- * the timestamp it carries, across a window measured in minutes, so a three-minute warmup delivered
- * in six seconds would land as six seconds of samples — a sliver, not a filled window. Running
- * session time fast stamps those samples across the three minutes they actually cover, and the
+ * the timestamp it carries, across a window measured in minutes, so a six-minute warmup delivered
+ * in twelve seconds would land as twelve seconds of samples — a sliver, not a filled window. Running
+ * session time fast stamps those samples across the six minutes they actually cover, and the
  * window is genuinely full the moment the warmup ends.
  *
  * The clock starts one warmup window in the past, so session time reaches "now" exactly as the
