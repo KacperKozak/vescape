@@ -169,7 +169,17 @@ export function useMainMapCameraEvents({
       ) {
         setCameraReady(true)
       }
-      if (!previewPanActive && mode === 'map' && !(followGps && headingFollowMode)) {
+      // Keep pitch on the zoom profile when something outside the engine moved
+      // the camera — a native pinch, mostly. Never while the engine animates:
+      // it writes pitch from its own spring every frame, and a direct write here
+      // would be overwritten on the next one, the two of them vibrating against
+      // each other until the spring settles.
+      if (
+        !previewPanActive &&
+        !engine.isAnimating() &&
+        mode === 'map' &&
+        !(followGps && headingFollowMode)
+      ) {
         const pitch = getPitchForZoom(state.properties.zoom, perspectiveEnabled)
         if (Math.abs(state.properties.pitch - pitch) > 0.5) {
           cameraRef.current?.setCameraDirect({ pitch })

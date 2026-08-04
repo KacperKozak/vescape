@@ -138,7 +138,19 @@ export function useCameraPreviewGestures({
     // the gesture's velocity out instead of stopping dead on the last sample,
     // and leave the springs at rest so a later target starts fresh.
     engine.release()
-  }, [engine, previewPanActiveRef])
+    // Centre and zoom carry the fling; pitch does not. It is derived from zoom,
+    // and the reveal already ended on that value — coasting it on the drag's
+    // pitch rate only overshoots the profile, the faster the drag the further.
+    const current = currentCameraRef.current
+    if (current) {
+      engine.setTarget({
+        pitch: getPitchForZoom(
+          current.zoomLevel,
+          imperativeHandleLatestRef.current.perspectiveEnabled,
+        ),
+      })
+    }
+  }, [currentCameraRef, engine, previewPanActiveRef])
 
   const beginPreviewZoom = useCallback(() => {
     const { followGps, getLiveFollowCamera, historyActive } = imperativeHandleLatestRef.current
