@@ -10,6 +10,7 @@ import {
 import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import type { HistoryGpsSample } from '@/modules/history/store/historyStore'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
+import { useFixGlideMs, useSmoothedFix } from '@/modules/map/hooks/useSmoothedFix'
 import type { DirectionPoint } from '@/modules/map/store/mapStore'
 import { isMapPinKindVisible } from '@/modules/map-points/lib/mapPointVisibility'
 import {
@@ -72,7 +73,22 @@ export function useLiveMapModel({
       previousReliableBearing,
     ],
   )
-  const { cameraFix, accuracyFix, accuracyRadiusM, directionBearingDeg } = gpsPresentation
+  const {
+    cameraFix,
+    accuracyFix: measuredAccuracyFix,
+    accuracyRadiusM,
+    directionBearingDeg,
+  } = gpsPresentation
+  // Presentation only: the puck, its accuracy circle and the heading cone ride an eased position so
+  // they travel between fixes instead of teleporting on each one. Everything that records or
+  // measures — the trail, the offscreen coordinate, Ride History — keeps the raw fixes.
+  //
+  // The camera deliberately stays on the measured fix. It reacts to a new fix once, keyed on that
+  // fix's timestamp, so pointing it at the eased position would aim it wherever the glide happened
+  // to start and leave it trailing a fix behind. Matching its animation to `fixGlideMs` is what
+  // keeps it moving in step with the puck instead.
+  const accuracyFix = useSmoothedFix(measuredAccuracyFix)
+  const fixGlideMs = useFixGlideMs(measuredAccuracyFix)
   const approximateGpsPuckActive =
     gpsPresentation.degraded ||
     (gpsFix == null && (latestApproximateLocation != null || initialApproximateFix != null))
@@ -140,9 +156,31 @@ export function useLiveMapModel({
         : null,
     [accuracyFix, accuracyRadiusM],
   )
+  // The trail has to end where the puck is drawn, not where the newest fix is. Built from the raw
+  // fixes it reaches the new position the instant that fix lands, while the puck is still a second
+  // behind gliding towards it — so the line visibly grows out ahead of the rider, worst at speed and
+  // on a fast replay. Replacing only the head with the eased position keeps every recorded point
+  // exactly where it was measured and lets the last segment grow as the puck travels it.
+  //
+  // An approximate puck is not on the precise track at all, so in that state the head is left alone
+  // rather than dragging the trail off towards a coarse fix.
   const liveTrailShape = useMemo(
-    () => (liveLocations.length >= 2 ? makeTrailLineString(liveLocations) : null),
-    [liveLocations],
+    () =>
+      liveLocations.length >= 2
+        ? makeTrailLineString(
+            accuracyFix && !approximateGpsPuckActive
+              ? [
+                  ...liveLocations.slice(0, -1),
+                  {
+                    ...liveLocations[liveLocations.length - 1],
+                    latitude: accuracyFix.latitude,
+                    longitude: accuracyFix.longitude,
+                  },
+                ]
+              : liveLocations,
+          )
+        : null,
+    [accuracyFix, approximateGpsPuckActive, liveLocations],
   )
   const rideRouteShape = useMemo(
     () =>
@@ -166,6 +204,7 @@ export function useLiveMapModel({
   return {
     gpsFix,
     cameraFix,
+    fixGlideMs,
     accuracyFix,
     accuracyShape,
     approximateGpsPuckActive,

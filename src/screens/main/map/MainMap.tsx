@@ -27,10 +27,7 @@ import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 
 import type { MainViewState } from '@/screens/main/mainViewState'
 import { type HistoryPreviewTarget, useCameraControls } from '@/screens/main/map/useCameraControls'
-import {
-  phoneHeadingAnimationDuration,
-  type PhoneHeadingStatus,
-} from '@/modules/map/lib/phoneHeading'
+import { type PhoneHeadingStatus } from '@/modules/map/lib/phoneHeading'
 import type { OffscreenMapIndicatorState } from '@/screens/main/map/offscreenMapIndicators'
 import { MapLoadingPlaceholder, MapUnavailable } from '@/screens/main/map/MainMapOverlays'
 import { MainMapScene } from '@/screens/main/map/MainMapScene'
@@ -185,6 +182,7 @@ export const MainMap = memo(
     const {
       gpsFix,
       cameraFix,
+      fixGlideMs,
       accuracyFix,
       accuracyShape,
       approximateGpsPuckActive,
@@ -290,9 +288,15 @@ export const MainMap = memo(
       },
       follow: {
         updatesEnabled: !(phoneHeadingMode && mode === 'map'),
-        animationDuration: headingFollowMode
-          ? phoneHeadingAnimationDuration()
-          : MAP_DEFAULTS.followAnimationDuration,
+        // Travel the whole gap between fixes rather than racing to the new one and waiting out the
+        // rest of the second. Paired with the eased puck position, this is what turns a 1 Hz fix
+        // stream into continuous motion instead of a lurch per second.
+        //
+        // Heading follow gets the same treatment. The instant move it used before was there to keep
+        // frame-rate heading writes from being swallowed by a running transition; the heading in
+        // this snapshot is the one already applied, so easing towards it moves the centre without
+        // asking the camera to turn anywhere it is not already pointing.
+        animationDuration: fixGlideMs,
       },
       getViewfinderCoordinateFromMap,
       onHeadingChange,

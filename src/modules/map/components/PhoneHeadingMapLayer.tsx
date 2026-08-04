@@ -94,7 +94,18 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
         phoneHeadingShape(coordinate, headingDegRef.current, approximateFix, followCamera),
       ),
     })
-  }, [approximateFix, coordinate, followCamera])
+    // While this layer drives the camera it owns the centre as well as the heading, and for the
+    // same reason: a `setCamera` animation towards each new fix cannot survive here, because the
+    // heading is written directly on every sensor sample and each of those writes cuts the
+    // animation short — the centre ends up jumping once per fix having eased for one frame.
+    // Writing the centre through the same direct path removes the animation from the problem. The
+    // coordinate is already eased upstream, so a direct write per frame *is* the smooth motion.
+    if (!followCamera || !coordinate) return
+    const currentCamera = currentCameraRef.current
+    const centerCoordinate: [number, number] = [coordinate.longitude, coordinate.latitude]
+    if (currentCamera) currentCameraRef.current = { ...currentCamera, centerCoordinate }
+    cameraRef.current?.setCameraDirect({ centerCoordinate })
+  }, [approximateFix, cameraRef, coordinate, currentCameraRef, followCamera])
 
   useEffect(() => {
     if (!active) {
