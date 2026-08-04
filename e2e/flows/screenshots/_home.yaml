@@ -26,14 +26,6 @@ appId: ${APP_ID}
 - runFlow:
     when:
       visible:
-        id: history-session-sheet-backdrop
-    commands:
-      # Same as the social drawer below: tap the exposed backdrop area, not the element centre.
-      - tapOn:
-          point: 50%, 90%
-- runFlow:
-    when:
-      visible:
         id: history-back
     commands:
       - tapOn:
