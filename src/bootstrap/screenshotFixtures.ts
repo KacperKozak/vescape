@@ -21,8 +21,8 @@ async function applyFixtures(): Promise<void> {
     await updateSetting('autoRecording', false)
   }
   // Warm the live charts so the panels have a filled window to photograph instead of the empty
-  // sparklines a session that just connected would show. Native fast-forwards the recording's first
-  // three minutes at 30x — about six seconds of real waiting — then plays on at 1x.
+  // sparklines a session that just connected would show. Native fast-forwards the recording's
+  // opening stretch (see `@/config/screenshotWarmup`), then plays on at 1x.
   if (screenshotReplayName) {
     await startDebugReplay(screenshotReplayName, {
       warmupMs: SCREENSHOT_REPLAY_WARMUP_MS,

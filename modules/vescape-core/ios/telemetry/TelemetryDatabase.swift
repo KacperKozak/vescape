@@ -77,10 +77,44 @@ enum TelemetryDatabase {
     return size.int64Value
   }
 
+  /// GRDB's own ledger of applied migrations. A backup taken on Android carries the schema but not
+  /// this table, so restoring one used to replay every migration against tables that already exist
+  /// — `CREATE TABLE boards` on a database that has `boards` — and the whole restore rolled back.
+  private static let migrationLedgerTable = "grdb_migrations"
+
+  /// Room version a migration corresponds to, read off its `v<N>_…` identifier.
+  ///
+  /// The identifiers are named after Android's Room versions on purpose: the two schemas move
+  /// together, so the number is what makes an incoming Room database comparable to this migrator.
+  /// (`v1` is the exception in content, not in numbering — iOS is greenfield, so it creates the
+  /// v1-era shapes directly rather than replaying Android's early steps.)
+  private static func roomVersion(of identifier: String) -> Int {
+    Int(identifier.dropFirst().prefix { $0.isNumber }) ?? Int.max
+  }
+
+  /// Mark the migrations an incoming foreign database already satisfies, so `migrate` runs only the
+  /// genuinely newer ones. A backup from an older Android build stamps fewer of them and gets the
+  /// remaining migrations applied for real.
+  ///
+  /// Internal, not private, so the migration tests can stamp a database the way a restore does.
+  internal static func stampAppliedMigrations(_ db: Database, schemaVersion: Int) throws {
+    try db.execute(sql: "CREATE TABLE IF NOT EXISTS \(migrationLedgerTable) (identifier TEXT NOT NULL PRIMARY KEY)")
+    for identifier in migrator.migrations where roomVersion(of: identifier) <= schemaVersion {
+      try db.execute(
+        sql: "INSERT OR IGNORE INTO \(migrationLedgerTable) (identifier) VALUES (?)",
+        arguments: [identifier]
+      )
+    }
+  }
+
   /// Hot-swap the database file with a validated restore, closing the live pool so SQLite releases
   /// the file + WAL sidecars, then reopening (and migrating) at the same path. On any failure the
   /// previous file is rolled back so the app is never left without a database.
-  static func replaceDatabase(withFileAt source: URL) throws {
+  ///
+  /// `schemaVersion` comes from the backup manifest and only matters for a database that has never
+  /// been migrated by GRDB — an Android backup. An iOS backup brings its own ledger and is migrated
+  /// from wherever it left off.
+  static func replaceDatabase(withFileAt source: URL, schemaVersion: Int) throws {
     guard let target = databaseURL else { throw CocoaError(.fileNoSuchFile) }
     let fm = FileManager.default
     let sidecarSuffixes = ["", "-wal", "-shm"]
@@ -104,6 +138,10 @@ enum TelemetryDatabase {
     do {
       try fm.copyItem(at: source, to: target)
       let pool = try DatabasePool(path: target.path)
+      try pool.write { db in
+        guard try !db.tableExists(migrationLedgerTable) else { return }
+        try stampAppliedMigrations(db, schemaVersion: schemaVersion)
+      }
       try migrator.migrate(pool)
       try pool.read { db in _ = try Int.fetchOne(db, sql: "SELECT 1") }
       reopened = pool

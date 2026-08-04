@@ -132,6 +132,50 @@ final class TelemetryMigrationTests: XCTestCase {
 
   /// A rider whose database already has the board-owned table must keep their rules: the migration
   /// must not rebuild the table a second time.
+  // MARK: - Restoring a database GRDB has never migrated
+
+  /// An Android backup carries the schema but not GRDB's ledger. Drop it to reproduce that.
+  private func dropMigrationLedger() throws {
+    try queue.write { db in try db.execute(sql: "DROP TABLE grdb_migrations") }
+  }
+
+  private func stamp(schemaVersion: Int) throws {
+    try queue.write { db in
+      try TelemetryDatabase.stampAppliedMigrations(db, schemaVersion: schemaVersion)
+    }
+  }
+
+  private func applied() throws -> Set<String> {
+    try queue.read { db in try TelemetryDatabase.migrator.appliedIdentifiers(db) }
+  }
+
+  /// Restoring an Android backup used to fail outright: no ledger meant `v1` replayed, and
+  /// `CREATE TABLE boards` on a database that already has `boards` rolled the whole restore back.
+  func testCurrentBackupIsStampedRatherThanReplayed() throws {
+    try migrate()
+    try dropMigrationLedger()
+
+    try stamp(schemaVersion: TELEMETRY_SCHEMA_VERSION)
+    try migrate()
+
+    XCTAssertEqual(try applied(), Set(TelemetryDatabase.migrator.migrations))
+  }
+
+  /// A backup from an older build must still get the migrations it is missing — stamping is a claim
+  /// about what the incoming schema already has, not a way to skip work.
+  func testOlderBackupRunsOnlyTheMigrationsItIsMissing() throws {
+    try migrate(upTo: "v25_board_warnings")
+    try dropMigrationLedger()
+
+    try stamp(schemaVersion: 25)
+    let stamped = try applied()
+    XCTAssertTrue(stamped.contains("v25_board_warnings"))
+    XCTAssertFalse(stamped.contains("v26_alert_source"))
+
+    try migrate()
+    XCTAssertEqual(try applied(), Set(TelemetryDatabase.migrator.migrations))
+  }
+
   func testBoardIdMigrationKeepsAlreadyBoardOwnedRules() throws {
     try migrate(upTo: "v26_alert_source")
     try queue.write { db in
