@@ -1,17 +1,12 @@
 import Mapbox from '@rnmapbox/maps'
 import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, View } from 'react-native'
-import {
-  isReplayBoardId,
-  type LocationEvent,
-  type MapPoint,
-  type MapPointCategory,
-} from 'vescape-core'
+import type { LocationEvent, MapPoint, MapPointCategory } from 'vescape-core'
 
 import type { DirectionPoint } from '@/modules/map/store/mapStore'
 
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
-import { screenshotModeEnabled } from '@/config/screenshotMode'
+import { captureMode } from '@/config/env'
 import {
   MAP_DEFAULTS,
   type MapNavigationMode,
@@ -21,14 +16,12 @@ import type { MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import { getGpsPuckBearing } from '@/modules/map/lib/gpsPuckHeading'
-import { deviceMotionPhoneHeadingAdapter } from '@/modules/map/lib/deviceMotionPhoneHeadingAdapter'
-import { createSimulatedPhoneHeadingAdapter } from '@/modules/map/lib/simulatedPhoneHeadingAdapter'
+import { usePhoneHeadingAdapter } from '@/screens/main/map/usePhoneHeadingAdapter'
 import type {
   HistoryGpsSample,
   HistoryMarker,
   TelemetrySample,
 } from '@/modules/history/store/historyStore'
-import { useBleStore } from '@/modules/board/store/bleStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 
@@ -236,19 +229,7 @@ export const MainMap = memo(
     const [phoneHeadingStatus, setPhoneHeadingStatus] = useState<PhoneHeadingStatus | 'idle'>(
       'idle',
     )
-    // A replay has no compass to read — it runs on whatever phone is holding it, usually still on a
-    // desk. Feeding the replayed GPS course in at the sensor boundary keeps every compass-driven
-    // feature (Compass follow rotation, the heading cone, navigation diagnostics) exercised.
-    const isReplay = useBleStore((s) => isReplayBoardId(s.connectedId))
-    const directionBearingDegRef = useRef<number | null>(null)
-    directionBearingDegRef.current = directionBearingDeg
-    const phoneHeadingAdapter = useMemo(
-      () =>
-        isReplay
-          ? createSimulatedPhoneHeadingAdapter(() => directionBearingDegRef.current)
-          : deviceMotionPhoneHeadingAdapter,
-      [isReplay],
-    )
+    const phoneHeadingAdapter = usePhoneHeadingAdapter()
     const headingFollowMode = gpsHeadingMode || phoneHeadingMode
     useRenderRateWarning('MainMap')
     const followHeadingDeg = gpsHeadingMode
@@ -453,12 +434,12 @@ export const MainMap = memo(
     // sleep and can catch a half-drawn map. Publish the map's own idle event as a waitable marker.
     const [mapSettled, setMapSettled] = useState(false)
     useEffect(() => {
-      if (screenshotModeEnabled) setMapSettled(false)
+      if (captureMode) setMapSettled(false)
     }, [mode])
     const handleIdle = useCallback(
       (...args: Parameters<typeof handleMapIdle>) => {
         handleMapIdle(...args)
-        if (screenshotModeEnabled) setMapSettled(true)
+        if (captureMode) setMapSettled(true)
       },
       [handleMapIdle],
     )
@@ -473,7 +454,7 @@ export const MainMap = memo(
 
     return (
       <>
-        {screenshotModeEnabled && mapSettled && (
+        {captureMode && mapSettled && (
           <View testID="map-settled" collapsable={false} pointerEvents="none" />
         )}
         <MainMapScene

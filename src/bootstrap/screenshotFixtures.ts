@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { restoreDatabase, startDebugReplay, updateSetting } from 'vescape-core'
 
+import { captureMode } from '@/config/env'
 import {
   screenshotDatabaseFile,
   screenshotFixtureUri,
-  screenshotModeEnabled,
   screenshotReplayName,
 } from '@/config/screenshotMode'
+import {
+  SCREENSHOT_REPLAY_WARMUP_MS,
+  SCREENSHOT_REPLAY_WARMUP_SPEED,
+} from '@/config/screenshotWarmup'
 
 async function applyFixtures(): Promise<void> {
   if (screenshotDatabaseFile) {
@@ -16,7 +20,15 @@ async function applyFixtures(): Promise<void> {
     // write a synthetic ride into the fixture history we are about to photograph.
     await updateSetting('autoRecording', false)
   }
-  if (screenshotReplayName) await startDebugReplay(screenshotReplayName)
+  // Warm the live charts so the panels have a filled window to photograph instead of the empty
+  // sparklines a session that just connected would show. Native fast-forwards the recording's first
+  // three minutes at 30x — about six seconds of real waiting — then plays on at 1x.
+  if (screenshotReplayName) {
+    await startDebugReplay(screenshotReplayName, {
+      warmupMs: SCREENSHOT_REPLAY_WARMUP_MS,
+      warmupSpeed: SCREENSHOT_REPLAY_WARMUP_SPEED,
+    })
+  }
 }
 
 /**
@@ -28,10 +40,10 @@ async function applyFixtures(): Promise<void> {
  * instead of racing a mid-flight database swap.
  */
 export function useScreenshotFixtures(): boolean {
-  const [ready, setReady] = useState(!screenshotModeEnabled)
+  const [ready, setReady] = useState(!captureMode)
 
   useEffect(() => {
-    if (!screenshotModeEnabled) return
+    if (!captureMode) return
     let cancelled = false
     void (async () => {
       try {

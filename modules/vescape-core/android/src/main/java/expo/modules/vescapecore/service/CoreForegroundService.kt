@@ -66,6 +66,14 @@ data class SessionConfig(
      * `recordingEnabled = false` and `autoReconnect = false`.
      */
     val replayRecordingName: String? = null,
+    /**
+     * How much of the recording plays faster than real time before playback settles to 1×, and how
+     * much faster. `0` — the default and what the dev Replay UI uses — is a plain 1× replay.
+     *
+     * @see expo.modules.vescapecore.replay.ReplayClock
+     */
+    val replayWarmupMs: Long = 0L,
+    val replayWarmupSpeed: Double = 1.0,
 )
 
 internal data class PendingStart(
@@ -322,6 +330,16 @@ class CoreForegroundService : Service() {
             riderColor: String?,
         ) {
             instance?.controller?.updateGroupRideIdentity(riderId, riderName, riderColor)
+        }
+
+        /**
+         * Offer a compass reading to whatever Debug Recording is running. No service, no session or
+         * no active recorder means it is simply dropped — JS pushes these unconditionally while the
+         * map's heading layer is live, and native is the one that knows whether anything is
+         * recording.
+         */
+        fun recordPhoneHeading(context: Context, headingDeg: Double) {
+            instance?.controller?.recordPhoneHeading(headingDeg)
         }
 
         fun setTelemetryRecordingEnabled(context: Context, enabled: Boolean) {

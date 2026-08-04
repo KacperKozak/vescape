@@ -18,7 +18,7 @@ import { Text } from '@/components/base/Text'
 import { DiagnosticErrorBoundary } from '@/modules/diagnostics/DiagnosticErrorBoundary'
 import { HeaderBackButton } from '@/components/base/HeaderBackButton'
 import { isDevelopmentApp } from '@/config/appVariant'
-import { screenshotModeEnabled } from '@/config/screenshotMode'
+import { showDevControls } from '@/config/env'
 import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
 import { startAlertsBoardSync } from '@/bootstrap/alertsBoardSync'
@@ -43,7 +43,7 @@ function requireClerkPublishableKey(): string {
 
 function DevelopmentBadge() {
   const insets = useSafeAreaInsets()
-  if (!isDevelopmentApp || screenshotModeEnabled) return null
+  if (!isDevelopmentApp || !showDevControls) return null
 
   return (
     <View

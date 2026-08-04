@@ -4,16 +4,13 @@ import { Platform } from 'react-native'
 import { applicationId } from '@/config/appVariant'
 
 /**
- * Screenshot capture mode: a Release build with `EXPO_PUBLIC_SCREENSHOTS=1` and `EXPO_PUBLIC_E2E`
- * unset, driven by `scripts/screenshots.ts` to produce store-ready frames from the real app.
- *
- * Deliberately independent of `EXPO_PUBLIC_E2E`: the e2e flag reroutes board/telemetry reads to
- * `e2eFake` (`vescape-core`), which would hide the native replay session the screenshots depend on.
- * Screenshot mode runs the production path end to end and only suppresses developer chrome.
+ * Fixture staging for a screenshot capture run: which recording to replay, which database backup to
+ * restore, and where the runner put it. The flag that turns capture mode on lives in
+ * `@/config/env` — this file is the run's plumbing, not the switch. It imports `react-native`, so
+ * anything the Node runner also needs belongs in `@/config/screenshotWarmup` instead.
  */
-export const screenshotModeEnabled = process.env.EXPO_PUBLIC_SCREENSHOTS === '1'
 
-/** Debug Recording replayed at 1x through the real telemetry pipeline. */
+/** Debug Recording replayed through the real telemetry pipeline. */
 export const screenshotReplayName = process.env.EXPO_PUBLIC_SCREENSHOTS_REPLAY ?? ''
 
 /** Backup zip filename the runner pushed into `screenshotFixtureDir`; empty skips the restore. */

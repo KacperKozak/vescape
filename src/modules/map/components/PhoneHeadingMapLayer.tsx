@@ -1,5 +1,6 @@
 import { Images, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
 import { memo, useEffect, useRef } from 'react'
+import { recordPhoneHeading } from 'vescape-core'
 
 import { theme } from '@/constants/theme'
 
@@ -10,12 +11,19 @@ import {
   type PhoneHeadingStatus,
 } from '@/modules/map/lib/phoneHeading'
 
+/**
+ * How often a compass reading is offered to a running Debug Recording. The sensor streams at ~60Hz;
+ * a replay reproduces the ride convincingly at a fraction of that, and every sample is a bridge call
+ * plus a line in the recording.
+ */
+const PHONE_HEADING_RECORD_INTERVAL_MS = 100
+
 const GPS_HEADING_ICON_ID = 'center-phone-heading'
 const GPS_HEADING_ICON = require('@rnmapbox/maps/src/assets/heading.png')
 
 interface PhoneHeadingMapLayerProps {
   active: boolean
-  /** Compass source. The caller picks it so a replay can supply a simulated one. */
+  /** Compass source. The caller picks it so a replay can supply the recorded stream instead. */
   adapter: PhoneHeadingAdapter
   followCamera: boolean
   approximateFix: boolean
@@ -100,9 +108,18 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
 
     let disposed = false
     let remove: (() => void) | null = null
+    let recordedAt = 0
 
     void startPhoneHeadingUpdates(adapter, (rawHeadingDeg) => {
       if (disposed) return
+      // Offer the raw reading — pre-smoothing, so a replay runs it through the same filters a live
+      // one goes through — to any Debug Recording that is running. Native drops it when none is, and
+      // a replay session never records, so playing a recording cannot feed its own headings back in.
+      const now = Date.now()
+      if (now - recordedAt >= PHONE_HEADING_RECORD_INTERVAL_MS) {
+        recordedAt = now
+        recordPhoneHeading(rawHeadingDeg)
+      }
       const headingDeg = deadBandPhoneHeading(headingDegRef.current, rawHeadingDeg)
       if (headingDeg === headingDegRef.current) return
 
