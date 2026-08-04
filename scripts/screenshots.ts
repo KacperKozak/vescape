@@ -32,7 +32,13 @@ import {
   SCREENSHOT_REPLAY_WARMUP_WALL_MS,
 } from '../src/config/screenshotWarmup.ts'
 import { createAndroidDriver } from './lib/androidCapture.ts'
-import { ROOT, runOrDie, type CaptureDriver, type CapturePlatform } from './lib/captureDriver.ts'
+import {
+  CommandFailed,
+  ROOT,
+  runOrDie,
+  type CaptureDriver,
+  type CapturePlatform,
+} from './lib/captureDriver.ts'
 import { createIosDriver } from './lib/iosCapture.ts'
 import { select, SelectCancelled } from './lib/select.ts'
 
@@ -234,5 +240,11 @@ try {
   await main(args)
 } catch (error) {
   if (error instanceof SelectCancelled) process.exit(130)
+  // Reported, not rethrown: the device restore has already run in `capturePlatform`'s `finally`,
+  // and a stack trace for a failed Maestro flow adds nothing to what Maestro already printed.
+  if (error instanceof CommandFailed) {
+    console.error(error.message)
+    process.exit(error.code)
+  }
   throw error
 }

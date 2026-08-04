@@ -3,4 +3,6 @@
 appId: ${APP_ID}
 ---
 - runFlow: _home.yaml
+- waitForAnimationToEnd:
+    timeout: 20000
 - takeScreenshot: ${OUT_DIR}/01-home

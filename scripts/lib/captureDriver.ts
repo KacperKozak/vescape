@@ -54,6 +54,24 @@ export async function capture(cmd: string[]): Promise<string> {
   return out
 }
 
+/**
+ * Run a command, throwing on a non-zero exit.
+ *
+ * It throws rather than calling `process.exit`, which does not unwind: a capture run mutates the
+ * device (animation scales off, SystemUI demo mode on) and restores it in a `finally`, and an exit
+ * from inside the try skips that. A failing Maestro flow used to leave the device with every
+ * animation globally disabled — a static spinner and a map that teleports, on every app built
+ * afterwards, with nothing on screen to say why.
+ */
+export class CommandFailed extends Error {
+  constructor(
+    readonly code: number,
+    cmd: string[],
+  ) {
+    super(`Command failed (${code}): ${cmd.join(' ')}`)
+  }
+}
+
 export async function runOrDie(
   cmd: string[],
   env?: Record<string, string | undefined>,
@@ -65,10 +83,7 @@ export async function runOrDie(
     ...(env ? { env } : {}),
   })
   const code = (await proc.exited) ?? 1
-  if (code !== 0) {
-    console.error(`Command failed (${code}): ${cmd.join(' ')}`)
-    process.exit(code)
-  }
+  if (code !== 0) throw new CommandFailed(code, cmd)
 }
 
 /**

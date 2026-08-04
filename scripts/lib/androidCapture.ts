@@ -185,12 +185,6 @@ async function warnOnResolution(device: string): Promise<void> {
   }
 }
 
-const ANIMATION_SCALES = [
-  'window_animation_scale',
-  'transition_animation_scale',
-  'animator_duration_scale',
-]
-
 export async function createAndroidDriver(
   requestedDevice: string | null,
   replay: string,
@@ -268,9 +262,11 @@ export async function createAndroidDriver(
     },
 
     async setChrome(clean: boolean) {
-      for (const scale of ANIMATION_SCALES) {
-        await adb('shell', 'settings', 'put', 'global', scale, clean ? '0' : '1')
-      }
+      // Animation scales are deliberately left alone. Turning them off device-wide makes a frame
+      // deterministic by abolishing the thing being photographed, and it outlives the run: a failed
+      // flow used to leave every app on the device without animations, with nothing on screen to say
+      // why. The flows wait for animations to finish instead — `waitForAnimationToEnd` before each
+      // shot, which is the same guarantee scoped to the run.
 
       // SystemUI demo mode pins the status bar so panels do not disagree on clock or battery.
       await adb('shell', 'settings', 'put', 'global', 'sysui_demo_allowed', clean ? '1' : '0')
