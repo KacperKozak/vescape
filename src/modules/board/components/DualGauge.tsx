@@ -47,7 +47,6 @@ interface DualGaugeProps {
   dutyAlerts?: DualGaugeAlert[]
   compact?: boolean
   transparent?: boolean
-  split?: boolean
   containerStyle?: StyleProp<ViewStyle>
 }
 
@@ -320,7 +319,6 @@ export function DualGauge({
   dutyAlerts = [],
   compact = false,
   transparent = false,
-  split = false,
   containerStyle,
 }: DualGaugeProps) {
   const router = useRouter()
@@ -334,8 +332,8 @@ export function DualGauge({
       ]}
     >
       <View style={styles.gaugeContent}>
-        <View style={[styles.row, split && styles.rowSplit]} pointerEvents="none">
-          <View style={[styles.halfPressable, split && styles.halfPressableSplit]}>
+        <View style={styles.row} pointerEvents="none">
+          <View style={styles.halfPressable}>
             <SparklineMaxBadge
               points={speedSeries ?? []}
               color={telemetry.speed.color}
@@ -343,7 +341,7 @@ export function DualGauge({
               position="left"
             />
           </View>
-          <View style={[styles.halfPressable, split && styles.halfPressableSplit]}>
+          <View style={styles.halfPressable}>
             <SparklineMaxBadge
               points={dutySeries ?? []}
               color={telemetry.duty.color}
@@ -411,12 +409,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   gaugePair: { width: '100%', aspectRatio: 1.4, position: 'relative' },
-  rowSplit: {
-    justifyContent: 'space-between',
-  },
-  halfPressableSplit: {
-    flex: 4,
-  },
   svg: {
     width: '100%',
     height: '100%',

@@ -195,7 +195,6 @@ function AnimatedSingleGaugeShowcase() {
 }
 
 function AnimatedDualGaugeShowcase() {
-  const [split, setSplit] = useState(false)
   const [compact, setCompact] = useState(false)
   const speed = useSharedValue<number | null>(0)
   const duty = useSharedValue<number | null>(0)
@@ -219,19 +218,13 @@ function AnimatedDualGaugeShowcase() {
   return (
     <ShowcaseCard
       name="DualGauge / animated ramp"
-      controls={
-        <>
-          <ToggleRow label="split" value={split} onToggle={setSplit} />
-          <ToggleRow label="compact" value={compact} onToggle={setCompact} />
-        </>
-      }
+      controls={<ToggleRow label="compact" value={compact} onToggle={setCompact} />}
     >
       <DualGauge
         speedValue={speed}
         dutyValue={duty}
         speedSeries={speedSeries}
         dutySeries={dutySeries}
-        split={split}
         compact={compact}
         speedAlerts={[{ id: 'speed-warn', threshold: 42, thresholdMax: null }]}
         dutyAlerts={[{ id: 'duty-warn', threshold: 80, thresholdMax: 95 }]}
