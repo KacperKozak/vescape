@@ -1,6 +1,11 @@
-import { useCallback, useMemo, useState } from 'react'
-import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native'
-import { useDerivedValue, type DerivedValue, type SharedValue } from 'react-native-reanimated'
+import { useMemo } from 'react'
+import type { StyleProp, ViewStyle } from 'react-native'
+import {
+  useDerivedValue,
+  useSharedValue,
+  type DerivedValue,
+  type SharedValue,
+} from 'react-native-reanimated'
 import { Canvas, Text as SkiaText } from '@shopify/react-native-skia'
 
 import { theme, type MonoWeight } from '@/constants/theme'
@@ -51,14 +56,10 @@ export function MonoValue({
   style,
 }: MonoValueProps) {
   const font = useSkiaMonoFont(weight, size)
-  const [measuredWidth, setMeasuredWidth] = useState(0)
-  const boxWidth = width ?? measuredWidth
   const lineHeight = height ?? Math.ceil(size * LINE_RATIO)
-
-  const onLayout = useCallback((e: LayoutChangeEvent) => {
-    const next = e.nativeEvent.layout.width
-    setMeasuredWidth((prev) => (prev === next ? prev : next))
-  }, [])
+  // `onLayout` is unsupported on Fabric canvases; `onSize` reports the measured
+  // box straight into a shared value, so alignment stays off the JS thread.
+  const canvasSize = useSharedValue({ width: width ?? 0, height: lineHeight })
 
   // Vertically center the glyph box: ascent is negative, descent positive.
   const baseline = useMemo(() => {
@@ -69,14 +70,14 @@ export function MonoValue({
 
   const x = useDerivedValue(() => {
     if (!font || align === 'left') return 0
-    const free = boxWidth - font.getTextWidth(text.value)
+    const free = (width ?? canvasSize.value.width) - font.getTextWidth(text.value)
     return align === 'center' ? free / 2 : free
   })
 
   return (
     <Canvas
       style={[{ height: lineHeight }, width == null ? null : { width }, style]}
-      onLayout={width == null ? onLayout : undefined}
+      onSize={canvasSize}
       pointerEvents="none"
     >
       {font ? <SkiaText x={x} y={baseline} text={text} font={font} color={color} /> : null}
