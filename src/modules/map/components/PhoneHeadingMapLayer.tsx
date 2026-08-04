@@ -1,9 +1,8 @@
-import { Images, ShapeSource, SymbolLayer, type Camera } from '@rnmapbox/maps'
-import { memo, useEffect, useRef, type RefObject } from 'react'
+import { Images, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
+import { memo, useEffect, useRef } from 'react'
 
 import { theme } from '@/constants/theme'
 
-import type { CameraSnapshot } from '@/modules/map/lib/cameraMotion'
 import {
   deadBandPhoneHeading,
   startPhoneHeadingUpdates,
@@ -19,8 +18,8 @@ interface PhoneHeadingMapLayerProps {
   followCamera: boolean
   approximateFix: boolean
   coordinate: { longitude: number; latitude: number } | null
-  cameraRef: RefObject<Camera | null>
-  currentCameraRef: RefObject<CameraSnapshot | null>
+  /** Called with each compass heading while the camera follows the phone. */
+  onFollowHeading: (headingDeg: number) => void
   onHeadingChange: (headingDeg: number | null) => void
   onStatusChange: (status: PhoneHeadingStatus | 'idle') => void
 }
@@ -53,8 +52,7 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
   followCamera,
   approximateFix,
   coordinate,
-  cameraRef,
-  currentCameraRef,
+  onFollowHeading,
   onHeadingChange,
   onStatusChange,
 }: PhoneHeadingMapLayerProps) {
@@ -104,9 +102,7 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
       })
 
       if (!followCameraRef.current) return
-      const currentCamera = currentCameraRef.current
-      if (currentCamera) currentCameraRef.current = { ...currentCamera, heading: headingDeg }
-      cameraRef.current?.setCameraDirect({ heading: headingDeg })
+      onFollowHeading(headingDeg)
     }).then((subscription) => {
       if (disposed) {
         subscription.remove()
@@ -120,7 +116,7 @@ export const PhoneHeadingMapLayer = memo(function PhoneHeadingMapLayer({
       disposed = true
       remove?.()
     }
-  }, [active, cameraRef, currentCameraRef, onHeadingChange, onStatusChange])
+  }, [active, onFollowHeading, onHeadingChange, onStatusChange])
 
   return (
     <>

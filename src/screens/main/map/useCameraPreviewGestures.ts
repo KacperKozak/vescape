@@ -4,8 +4,6 @@ import { MAP_DEFAULTS } from '@/modules/map/constants/mapStyles'
 import { getMapRevealPitch, getPitchForZoom } from '@/modules/map/lib/cameraProfiles'
 import { getCameraAfterScreenDrag } from '@/modules/map/lib/cameraPanProjection'
 import {
-  cameraDistanceTo,
-  cameraMoveDuration,
   clamp,
   liveFollowKey,
   MAP_REVEAL_ZOOM_OUT_DELTA,
@@ -22,13 +20,12 @@ interface UseCameraPreviewGesturesParams {
   gpsHeadingMode: boolean
   historyActive: boolean
   perspectiveEnabled: boolean
-  applyLiveFollowCamera: (animationDuration: number) => void
+  applyLiveFollowCamera: () => void
   enterCameraMode: (mode: { kind: 'liveFollow' }) => void
   getFollowHeadingDeg: () => number
   getLiveFollowCamera: () => CameraSnapshot
   setFollowGps: (enabled: boolean) => void
   setFollowZoomLevel: (zoomLevel: number) => void
-  suspendPhoneHeadingCamera: (animationDuration: number) => void
 }
 
 export function useCameraPreviewGestures({
@@ -45,9 +42,8 @@ export function useCameraPreviewGestures({
   getLiveFollowCamera,
   setFollowGps,
   setFollowZoomLevel,
-  suspendPhoneHeadingCamera,
 }: UseCameraPreviewGesturesParams) {
-  const { cameraRef, currentCameraRef, lastFollowKeyRef } = cameraRefs
+  const { cameraRef, currentCameraRef, engine, lastFollowKeyRef } = cameraRefs
   const previewPanBaseRef = useRef<CameraSnapshot | null>(null)
   const previewPanCameraRef = useRef<CameraSnapshot | null>(null)
   const previewZoomBaseRef = useRef<CameraSnapshot | null>(null)
@@ -101,7 +97,7 @@ export function useCameraPreviewGestures({
   }, [currentCameraRef])
 
   const previewPanBy = useCallback(
-    (deltaX: number, deltaY: number, animationDuration = 0, revealProgress = 0) => {
+    (deltaX: number, deltaY: number, _animationDuration = 0, revealProgress = 0) => {
       const { perspectiveEnabled, setFollowGps } = imperativeHandleLatestRef.current
       setFollowGps(false)
       const baseCamera = previewPanBaseRef.current
@@ -123,13 +119,25 @@ export function useCameraPreviewGestures({
       }
       previewPanCameraRef.current = previewCamera
       currentCameraRef.current = previewCamera
-      cameraRef.current?.setCamera({
-        ...previewCamera,
-        animationMode: 'linearTo',
-        animationDuration,
+      // Engine shadow-tracks the drag so a later release blends out of the
+      // gesture's velocity instead of jumping.
+      engine.driveExternal(
+        {
+          centerCoordinate: previewCamera.centerCoordinate,
+          zoomLevel: previewCamera.zoomLevel,
+          heading: previewCamera.heading,
+          pitch: previewCamera.pitch,
+        },
+        1 / 60,
+      )
+      cameraRef.current?.setCameraDirect({
+        center: previewCamera.centerCoordinate,
+        zoom: previewCamera.zoomLevel,
+        heading: previewCamera.heading,
+        pitch: previewCamera.pitch,
       })
     },
-    [cameraRef, currentCameraRef],
+    [cameraRef, currentCameraRef, engine],
   )
 
   const endPreviewPan = useCallback(() => {
@@ -153,7 +161,7 @@ export function useCameraPreviewGestures({
     const zoomLevel = clamp(baseCamera.zoomLevel + Math.log2(scale), MIN_ZOOM, MAP_DEFAULTS.maxZoom)
     setFollowZoomLevel(zoomLevel)
     if (followGps && !historyActive) {
-      applyLiveFollowCamera(0)
+      applyLiveFollowCamera()
     }
   }, [])
 
@@ -171,30 +179,16 @@ export function useCameraPreviewGestures({
     if (cameraFix) {
       lastFollowKeyRef.current = liveFollowKey(cameraFix.timestamp, restoreCamera)
     }
-    const duration = cameraMoveDuration(
-      cameraDistanceTo(currentCameraRef.current, {
-        longitude: restoreCamera.centerCoordinate[0],
-        latitude: restoreCamera.centerCoordinate[1],
-      }),
-      MAP_DEFAULTS.followAnimationDuration,
-    )
-    suspendPhoneHeadingCamera(duration)
-    cameraRef.current?.setCamera({
-      ...restoreCamera,
+    // The engine shadow-tracked the pan, so the return ride starts from the
+    // gesture's position and velocity — no snap on release.
+    engine.setTarget({
+      center: restoreCamera.centerCoordinate,
+      zoom: restoreCamera.zoomLevel,
       heading: restoreCamera.heading,
       pitch: restoreCamera.pitch,
-      animationDuration: duration,
-      animationMode: 'easeTo',
+      padding: restoreCamera.padding,
     })
-  }, [
-    cameraFix,
-    cameraRef,
-    currentCameraRef,
-    enterCameraMode,
-    getLiveFollowCamera,
-    lastFollowKeyRef,
-    suspendPhoneHeadingCamera,
-  ])
+  }, [cameraFix, engine, enterCameraMode, getLiveFollowCamera, lastFollowKeyRef])
 
   return {
     previewPanActiveRef,

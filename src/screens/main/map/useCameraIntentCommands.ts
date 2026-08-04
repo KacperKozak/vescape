@@ -33,20 +33,20 @@ export function useCameraIntentCommands({
   onHeadingChange,
   onPerspectiveChange,
 }: UseCameraIntentCommandsParams) {
-  const { cameraRef, currentCameraRef, followZoomLevelRef } = cameraRefs
+  const { currentCameraRef, engine, followZoomLevelRef } = cameraRefs
   const applyCamera = useCallback(
-    (
-      camera: Partial<CameraSnapshot> | undefined,
-      overrides?: { animationDuration?: number; zoomLevel?: number },
-    ) => {
-      cameraRef.current?.setCamera({
-        ...camera,
-        ...overrides,
-        animationDuration: overrides?.animationDuration ?? MAP_DEFAULTS.animationDuration,
-        animationMode: 'easeTo',
+    (camera: Partial<CameraSnapshot> | undefined, overrides?: { zoomLevel?: number }) => {
+      if (!camera) return
+      const zoomLevel = overrides?.zoomLevel ?? camera.zoomLevel
+      engine.setTarget({
+        ...(camera.centerCoordinate ? { center: camera.centerCoordinate } : {}),
+        ...(zoomLevel != null ? { zoom: zoomLevel } : {}),
+        ...(camera.heading != null ? { heading: camera.heading } : {}),
+        ...(camera.pitch != null ? { pitch: camera.pitch } : {}),
+        ...(camera.padding ? { padding: camera.padding } : {}),
       })
     },
-    [cameraRef],
+    [engine],
   )
 
   const resetRotation = useCallback(() => {
@@ -78,12 +78,15 @@ export function useCameraIntentCommands({
 
   const setPadding = useCallback(
     (bottom: number) => {
-      applyCamera(
-        { padding: { paddingBottom: bottom, paddingTop: 0, paddingLeft: 0, paddingRight: 0 } },
-        { animationDuration: bottom === 0 ? 0 : 300 },
-      )
+      const padding = { paddingBottom: bottom, paddingTop: 0, paddingLeft: 0, paddingRight: 0 }
+      // Removing the padding (entering map mode) is intentionally instant.
+      if (bottom === 0) {
+        engine.snap({ padding })
+      } else {
+        engine.setTarget({ padding })
+      }
     },
-    [applyCamera],
+    [engine],
   )
 
   const zoomBy = useCallback(

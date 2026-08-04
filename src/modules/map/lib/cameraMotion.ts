@@ -83,10 +83,6 @@ export function historyBucketPreviewDuration(distanceM: number) {
   )
 }
 
-export function cameraMoveDuration(distanceM: number, smoothDuration: number) {
-  return distanceM > INSTANT_JUMP_DISTANCE_M ? 0 : smoothDuration
-}
-
 export function getHistoryPreviewZoom(zoomLevel: number) {
   return clamp(zoomLevel - HISTORY_PREVIEW_ZOOM_OUT_DELTA, MIN_ZOOM, MAP_DEFAULTS.maxZoom)
 }

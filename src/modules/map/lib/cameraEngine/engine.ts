@@ -12,11 +12,19 @@ import {
   type SpringState,
 } from './springs'
 
+export interface EnginePadding {
+  paddingTop: number
+  paddingRight: number
+  paddingBottom: number
+  paddingLeft: number
+}
+
 export interface EngineCamera {
   centerCoordinate: [number, number]
   zoomLevel: number
   heading: number
   pitch: number
+  padding?: EnginePadding
 }
 
 export interface CameraEngineTarget {
@@ -25,6 +33,7 @@ export interface CameraEngineTarget {
   heading?: number
   /** Explicit pitch target; when omitted and `derivePitch` is configured, pitch follows zoom. */
   pitch?: number
+  padding?: EnginePadding
 }
 
 export interface CameraEngineConfig {
@@ -53,6 +62,7 @@ export interface CameraEngineOmega {
   zoom: number
   heading: number
   pitch: number
+  padding: number
 }
 
 export const CAMERA_ENGINE_DEFAULT_OMEGA: CameraEngineOmega = {
@@ -60,6 +70,7 @@ export const CAMERA_ENGINE_DEFAULT_OMEGA: CameraEngineOmega = {
   zoom: 5,
   heading: 8,
   pitch: 5,
+  padding: 7,
 }
 
 export const CAMERA_ENGINE_DEFAULT_TELEPORT_DISTANCE_M = 10_000
@@ -80,6 +91,9 @@ const MAX_FRAME_DT_S = 0.064
 const CENTER_EPSILON_DEG = 1e-7
 const ZOOM_EPSILON = 1e-4
 const ANGLE_EPSILON_DEG = 1e-3
+const PADDING_EPSILON_PX = 0.1
+
+const PADDING_KEYS = ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'] as const
 
 interface EngineSprings {
   lng: SpringState
@@ -87,6 +101,7 @@ interface EngineSprings {
   zoom: SpringState
   heading: SpringState
   pitch: SpringState
+  padding: [SpringState, SpringState, SpringState, SpringState]
 }
 
 export interface CameraEngine {
@@ -103,6 +118,8 @@ export interface CameraEngine {
    * the camera.
    */
   driveExternal: (camera: EngineCamera, dtSeconds: number) => void
+  /** Halt in place: park every spring where it is, kill velocity, stop the loop. */
+  stop: () => void
   /** True while the frame loop is running. */
   isAnimating: () => boolean
   getCamera: () => EngineCamera
@@ -138,14 +155,32 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
     zoomLevel: s.zoom.x,
     heading: normalizeBearing(s.heading.x),
     pitch: s.pitch.x,
+    padding: {
+      paddingTop: s.padding[0].x,
+      paddingRight: s.padding[1].x,
+      paddingBottom: s.padding[2].x,
+      paddingLeft: s.padding[3].x,
+    },
   })
+
+  const eachPadding = (
+    s: EngineSprings,
+    padding: EnginePadding | undefined,
+    apply: (spring: SpringState, target: number) => SpringState,
+  ): EngineSprings['padding'] =>
+    padding
+      ? (s.padding.map((spring, i) =>
+          apply(spring, padding[PADDING_KEYS[i]!]),
+        ) as EngineSprings['padding'])
+      : s.padding
 
   const settled = (s: EngineSprings) =>
     springSettled(s.lng, CENTER_EPSILON_DEG, CENTER_EPSILON_DEG) &&
     springSettled(s.lat, CENTER_EPSILON_DEG, CENTER_EPSILON_DEG) &&
     springSettled(s.zoom, ZOOM_EPSILON, ZOOM_EPSILON) &&
     springSettled(s.heading, ANGLE_EPSILON_DEG, ANGLE_EPSILON_DEG) &&
-    springSettled(s.pitch, ANGLE_EPSILON_DEG, ANGLE_EPSILON_DEG)
+    springSettled(s.pitch, ANGLE_EPSILON_DEG, ANGLE_EPSILON_DEG) &&
+    s.padding.every((p) => springSettled(p, PADDING_EPSILON_PX, PADDING_EPSILON_PX))
 
   const stopLoop = () => {
     if (frameHandle != null) cancelFrame(frameHandle)
@@ -180,6 +215,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
       zoom: stepSpring(s.zoom, omega.zoom, dt),
       heading: stepSpring(s.heading, omega.heading, dt),
       pitch: stepSpring(s.pitch, omega.pitch, dt),
+      padding: s.padding.map((p) => stepSpring(p, omega.padding, dt)) as EngineSprings['padding'],
     }
     if (pitchFollowsZoom && config.derivePitch) {
       s.pitch = retargetSpring(s.pitch, config.derivePitch(s.zoom.x))
@@ -195,6 +231,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
         zoom: snapSpring(s.zoom, s.zoom.target),
         heading: snapSpring(s.heading, s.heading.target),
         pitch: snapSpring(s.pitch, s.pitch.target),
+        padding: s.padding.map((p) => snapSpring(p, p.target)) as EngineSprings['padding'],
       }
       config.applyFrame(toCamera(springs))
       lastFrameMs = null
@@ -224,12 +261,16 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
   const reset = (camera: EngineCamera) => {
     stopLoop()
     zoomUserTarget = camera.zoomLevel
+    const padding = camera.padding
     springs = {
       lng: createSpring(camera.centerCoordinate[0]),
       lat: createSpring(camera.centerCoordinate[1]),
       zoom: createSpring(camera.zoomLevel),
       heading: createSpring(camera.heading),
       pitch: createSpring(camera.pitch),
+      padding: PADDING_KEYS.map((key) =>
+        createSpring(padding?.[key] ?? 0),
+      ) as EngineSprings['padding'],
     }
   }
 
@@ -248,6 +289,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
           ? snapSpring(s.heading, nearestBearingTarget(s.heading.x, target.heading))
           : s.heading,
       pitch: pitchTarget != null ? snapSpring(s.pitch, pitchTarget) : s.pitch,
+      padding: eachPadding(s, target.padding, snapSpring),
     }
     config.applyFrame(toCamera(springs))
     ensureLoop()
@@ -276,6 +318,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
           ? retargetSpring(s.heading, nearestBearingTarget(s.heading.x, target.heading))
           : s.heading,
       pitch: pitchTarget != null ? retargetSpring(s.pitch, pitchTarget) : s.pitch,
+      padding: eachPadding(s, target.padding, retargetSpring),
     }
     ensureLoop()
   }
@@ -294,7 +337,23 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
       zoom: driveSpring(s.zoom, camera.zoomLevel, dtSeconds),
       heading: driveSpring(s.heading, nearestBearingTarget(s.heading.x, camera.heading), dtSeconds),
       pitch: driveSpring(s.pitch, camera.pitch, dtSeconds),
+      padding: eachPadding(s, camera.padding, (spring, x) => driveSpring(spring, x, dtSeconds)),
     }
+  }
+
+  const stop = () => {
+    stopLoop()
+    if (!springs) return
+    const s = springs
+    springs = {
+      lng: snapSpring(s.lng, s.lng.x),
+      lat: snapSpring(s.lat, s.lat.x),
+      zoom: snapSpring(s.zoom, s.zoom.x),
+      heading: snapSpring(s.heading, s.heading.x),
+      pitch: snapSpring(s.pitch, s.pitch.x),
+      padding: s.padding.map((p) => snapSpring(p, p.x)) as EngineSprings['padding'],
+    }
+    zoomUserTarget = s.zoom.x
   }
 
   return {
@@ -302,6 +361,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
     setTarget,
     snap,
     driveExternal,
+    stop,
     isAnimating: () => frameHandle != null,
     getCamera: () => {
       if (!springs) throw new Error('CameraEngine.getCamera called before reset')

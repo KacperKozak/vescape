@@ -9,6 +9,7 @@ import {
 } from 'react'
 
 import { distanceMeters } from '@/helpers/mapGeometry'
+import type { CameraEngine } from '@/modules/map/lib/cameraEngine/engine'
 import { getLiveFollowCameraProfile, getPitchForZoom } from '@/modules/map/lib/cameraProfiles'
 import { shouldPreserveLiveFollowGesture } from '@/modules/map/lib/cameraGestureState'
 import type { MainViewState } from '@/screens/main/mainViewState'
@@ -23,6 +24,7 @@ type CameraTarget = CameraSnapshot & {
 export function useMainMapCameraEvents({
   cameraRef,
   currentCameraRef,
+  engine,
   cameraFix,
   gpsCameraCenter,
   followGps,
@@ -52,6 +54,7 @@ export function useMainMapCameraEvents({
 }: {
   cameraRef: RefObject<Camera | null>
   currentCameraRef: RefObject<CameraSnapshot | null>
+  engine: CameraEngine
   cameraFix: GpsFix | null
   gpsCameraCenter: [number, number]
   followGps: boolean
@@ -104,16 +107,26 @@ export function useMainMapCameraEvents({
         : historyActive
           ? 0
           : followHeadingDeg
+    const initialPitch = styleReloadCamera
+      ? styleReloadCamera.pitch
+      : getPitchForZoom(camera.zoomLevel, perspectiveEnabled)
     cameraRef.current?.setCamera({
       ...camera,
       heading: initialHeading,
-      pitch: styleReloadCamera
-        ? styleReloadCamera.pitch
-        : getPitchForZoom(camera.zoomLevel, perspectiveEnabled),
+      pitch: initialPitch,
       animationDuration: 0,
+    })
+    // Park the springs on the load camera so the first target animates from it.
+    engine.reset({
+      centerCoordinate: camera.centerCoordinate,
+      zoomLevel: camera.zoomLevel,
+      heading: initialHeading,
+      pitch: initialPitch,
+      padding: 'padding' in camera ? camera.padding : undefined,
     })
   }, [
     cameraRef,
+    engine,
     followHeadingDeg,
     getHistoryPreviewCamera,
     getLiveFollowCamera,
@@ -140,6 +153,12 @@ export function useMainMapCameraEvents({
         pitch: state.properties.pitch,
       } satisfies CameraSnapshot
       currentCameraRef.current = camera
+      // While a native gesture (or any non-engine mover) owns the camera, the
+      // engine shadow-tracks it so its next target blends from here. While the
+      // engine itself animates, its own echoes are skipped.
+      if (state.gestures.isGestureActive || !engine.isAnimating()) {
+        engine.driveExternal(camera, 1 / 60)
+      }
       repositionOffscreenIndicatorsForCamera(camera)
       const [targetLongitude, targetLatitude] = gpsCameraCenter
       if (
@@ -198,6 +217,7 @@ export function useMainMapCameraEvents({
       cameraRef,
       cameraFix,
       currentCameraRef,
+      engine,
       followGps,
       followHeadingDeg,
       gpsCameraCenter,

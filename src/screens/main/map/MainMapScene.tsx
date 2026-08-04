@@ -22,7 +22,6 @@ interface MainMapSceneProps {
   onTouchStart: ComponentProps<typeof Animated.View>['onTouchStart']
   mapViewRef: RefObject<ElementRef<typeof Mapbox.MapView> | null>
   cameraRef: RefObject<Camera | null>
-  currentCameraRef: ComponentProps<typeof PhoneHeadingMapLayer>['currentCameraRef']
   mapStyle: ReturnType<typeof useResolvedMapStyle>
   rotationLocked: boolean
   onDidFinishLoadingMap: MapViewProps['onDidFinishLoadingMap']
@@ -35,9 +34,9 @@ interface MainMapSceneProps {
   gpsHeadingMode: boolean
   phoneHeadingMode: boolean
   followGps: boolean
-  phoneHeadingCameraSuspended: boolean
   approximateGpsPuckActive: boolean
   accuracyFix: LayerProps['accuracyFix']
+  onPhoneFollowHeading: ComponentProps<typeof PhoneHeadingMapLayer>['onFollowHeading']
   onPhoneHeadingChange: ComponentProps<typeof PhoneHeadingMapLayer>['onHeadingChange']
   onPhoneHeadingStatusChange: ComponentProps<typeof PhoneHeadingMapLayer>['onStatusChange']
   mode: MainViewState
@@ -70,7 +69,6 @@ export function MainMapScene({
   onTouchStart,
   mapViewRef,
   cameraRef,
-  currentCameraRef,
   mapStyle,
   rotationLocked,
   onDidFinishLoadingMap,
@@ -83,9 +81,9 @@ export function MainMapScene({
   gpsHeadingMode,
   phoneHeadingMode,
   followGps,
-  phoneHeadingCameraSuspended,
   approximateGpsPuckActive,
   accuracyFix,
+  onPhoneFollowHeading,
   onPhoneHeadingChange,
   onPhoneHeadingStatusChange,
   mode,
@@ -152,11 +150,10 @@ export function MainMapScene({
         />
         <PhoneHeadingMapLayer
           active={!historyActive && !gpsHeadingMode}
-          followCamera={phoneHeadingMode && followGps && !phoneHeadingCameraSuspended}
+          followCamera={phoneHeadingMode && followGps}
           approximateFix={approximateGpsPuckActive}
           coordinate={accuracyFix}
-          cameraRef={cameraRef}
-          currentCameraRef={currentCameraRef}
+          onFollowHeading={onPhoneFollowHeading}
           onHeadingChange={onPhoneHeadingChange}
           onStatusChange={onPhoneHeadingStatusChange}
         />

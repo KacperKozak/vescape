@@ -25,10 +25,7 @@ import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 
 import type { MainViewState } from '@/screens/main/mainViewState'
 import { type HistoryPreviewTarget, useCameraControls } from '@/screens/main/map/useCameraControls'
-import {
-  phoneHeadingAnimationDuration,
-  type PhoneHeadingStatus,
-} from '@/modules/map/lib/phoneHeading'
+import type { PhoneHeadingStatus } from '@/modules/map/lib/phoneHeading'
 import type { OffscreenMapIndicatorState } from '@/screens/main/map/offscreenMapIndicators'
 import { MapLoadingPlaceholder, MapUnavailable } from '@/screens/main/map/MainMapOverlays'
 import { MainMapScene } from '@/screens/main/map/MainMapScene'
@@ -255,6 +252,7 @@ export const MainMap = memo(
     const {
       cameraRef,
       currentCameraRef,
+      engine,
       gpsCamera,
       followGps,
       setFollowGps,
@@ -263,7 +261,6 @@ export const MainMap = memo(
       recenterLive,
       getLiveFollowCamera,
       getHistoryPreviewCamera,
-      phoneHeadingCameraSuspended,
     } = useCameraControls({
       ref,
       cameraFix,
@@ -287,9 +284,6 @@ export const MainMap = memo(
       },
       follow: {
         updatesEnabled: !(phoneHeadingMode && mode === 'map'),
-        animationDuration: headingFollowMode
-          ? phoneHeadingAnimationDuration()
-          : MAP_DEFAULTS.followAnimationDuration,
       },
       getViewfinderCoordinateFromMap,
       onHeadingChange,
@@ -318,6 +312,12 @@ export const MainMap = memo(
       enabled: !historyActive,
     })
 
+    const handlePhoneFollowHeading = useCallback(
+      (headingDeg: number) => {
+        engine.setTarget({ heading: headingDeg })
+      },
+      [engine],
+    )
     const handlePhoneHeadingChange = useCallback(
       (headingDeg: number | null) => {
         phoneHeadingDegRef.current = headingDeg
@@ -381,6 +381,7 @@ export const MainMap = memo(
     const { handleMapLoaded, handleCameraChanged, handleMapIdle } = useMainMapCameraEvents({
       cameraRef,
       currentCameraRef,
+      engine,
       cameraFix,
       gpsCameraCenter: gpsCamera.centerCoordinate,
       followGps,
@@ -444,7 +445,6 @@ export const MainMap = memo(
         onTouchStart={handleTouchStart}
         mapViewRef={mapViewRef}
         cameraRef={cameraRef}
-        currentCameraRef={currentCameraRef}
         mapStyle={mapStyle}
         rotationLocked={rotationLocked}
         onDidFinishLoadingMap={handleMapLoaded}
@@ -457,9 +457,9 @@ export const MainMap = memo(
         gpsHeadingMode={gpsHeadingMode}
         phoneHeadingMode={phoneHeadingMode}
         followGps={followGps}
-        phoneHeadingCameraSuspended={phoneHeadingCameraSuspended}
         approximateGpsPuckActive={approximateGpsPuckActive}
         accuracyFix={accuracyFix}
+        onPhoneFollowHeading={handlePhoneFollowHeading}
         onPhoneHeadingChange={handlePhoneHeadingChange}
         onPhoneHeadingStatusChange={setPhoneHeadingStatus}
         mode={mode}
