@@ -242,9 +242,20 @@ export const interaction = {
 export type FontWeight = '300' | '400' | '500' | '600' | '700' | '800' | '900'
 
 /** App-wide UI font family for a given weight. Load via `useFonts` in
- *  `src/app/_layout.tsx` before first render. Monospace readouts
- *  (`fontFamily: 'monospace'`) bypass this token by inlining their value. */
+ *  `src/app/_layout.tsx` before first render. Monospace readouts bypass this
+ *  token and use `mono()` instead. */
 export const font = (weight: FontWeight = '500') => `Raleway-${weight}`
+
+/** Weights shipped as static JetBrains Mono instances, same one-file-per-weight
+ *  rule as Raleway. Only the weights readouts actually use are bundled. */
+export type MonoWeight = '500' | '600' | '700' | '800'
+
+/** Monospace family for numeric readouts. Fixed advance width keeps fast-ticking
+ *  digits from reflowing, which the platform `'monospace'` alias could not
+ *  guarantee across iOS and Android. Live values render through
+ *  `MonoValue`/`TickText` on Skia; this token is for the static labels beside
+ *  them. */
+export const mono = (weight: MonoWeight = '700') => `JetBrainsMono-${weight}`
 
 export const theme = {
   palette,
@@ -258,4 +269,5 @@ export const theme = {
   zone,
   interaction,
   font,
+  mono,
 } as const
