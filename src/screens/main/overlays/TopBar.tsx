@@ -25,7 +25,7 @@ import { useBleStore } from '@/modules/board/store/bleStore'
 import { isReplayBoardId } from 'vescape-core'
 import { isNightAtTime } from '@/modules/weather/lib/weather'
 import { routes } from '@/navigation/routes'
-import { screenshotModeEnabled } from '@/config/screenshotMode'
+import { showDevControls } from '@/config/env'
 import type { Board } from '@/modules/board/store/boardStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
@@ -81,7 +81,7 @@ const BoardPill = forwardRef<View, BoardPillProps>(function BoardPill(
         accessibilityLabel="Board selector"
       >
         <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-        {isReplay && !screenshotModeEnabled && <ReplayBadge />}
+        {isReplay && showDevControls && <ReplayBadge />}
         <Text style={styles.boardText} numberOfLines={1}>
           {name}
         </Text>
