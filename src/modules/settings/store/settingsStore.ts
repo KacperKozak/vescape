@@ -16,7 +16,7 @@ import {
 const DEFAULTS: AppSettings = {
   liveHistoryLimit: 5,
   autoConnect: true,
-  autoRecording: false,
+  autoRecording: true,
   selectedBoardId: null,
   lastGpsLatitude: null,
   lastGpsLongitude: null,

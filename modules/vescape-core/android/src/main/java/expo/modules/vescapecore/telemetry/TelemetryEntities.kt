@@ -350,7 +350,7 @@ data class AppSettingEntity(
 data class AppSettings(
   val liveHistoryLimit: Int = 5,
   val autoConnect: Boolean = true,
-  val autoRecording: Boolean = false,
+  val autoRecording: Boolean = true,
   val selectedBoardId: String? = null,
   val lastGpsLatitude: Double? = null,
   val lastGpsLongitude: Double? = null,
