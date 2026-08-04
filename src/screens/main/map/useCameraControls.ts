@@ -329,7 +329,7 @@ export function useCameraControls({
       beginPreviewPan() {
         imperativeHandleLatestRef.current.previewGestures.beginPreviewPan()
       },
-      previewPanBy(...args: [number, number, number?, number?]) {
+      previewPanBy(...args: [number, number, number]) {
         imperativeHandleLatestRef.current.previewGestures.previewPanBy(...args)
       },
       endPreviewPan() {

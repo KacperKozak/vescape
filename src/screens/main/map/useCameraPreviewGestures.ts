@@ -43,7 +43,6 @@ export function useCameraPreviewGestures({
 }: UseCameraPreviewGesturesParams) {
   const { cameraRef, currentCameraRef, engine, lastFollowKeyRef, previewPanActiveRef } = cameraRefs
   const previewPanBaseRef = useRef<CameraSnapshot | null>(null)
-  const previewPanCameraRef = useRef<CameraSnapshot | null>(null)
   const previewZoomBaseRef = useRef<CameraSnapshot | null>(null)
   /** Whether the drag started from live follow, so a cancel returns to the live camera. */
   const previewPanFollowedRef = useRef(false)
@@ -73,7 +72,6 @@ export function useCameraPreviewGestures({
       setFollowGps,
     } = imperativeHandleLatestRef.current
     previewPanActiveRef.current = true
-    previewPanCameraRef.current = null
     previewPanFollowedRef.current = followGps && !historyActive
     // Anchor on what is actually on screen, not on the camera live follow would
     // like to be at: grabbing the map mid-ride must not teleport it first.
@@ -86,7 +84,7 @@ export function useCameraPreviewGestures({
   }, [currentCameraRef, previewPanActiveRef])
 
   const previewPanBy = useCallback(
-    (deltaX: number, deltaY: number, _animationDuration = 0, revealProgress = 0) => {
+    (deltaX: number, deltaY: number, revealProgress: number) => {
       const { perspectiveEnabled, setFollowGps } = imperativeHandleLatestRef.current
       setFollowGps(false)
       const baseCamera = previewPanBaseRef.current
@@ -96,8 +94,11 @@ export function useCameraPreviewGestures({
         MIN_ZOOM,
         MAP_DEFAULTS.maxZoom,
       )
+      // Project the drag at the zoom the map is actually rendering, not the one
+      // it started at: the reveal zooms out, and projecting at the base zoom
+      // moves the ground too little, so the map crawls behind the finger.
       const previewCamera = {
-        ...getCameraAfterScreenDrag(baseCamera, deltaX, deltaY),
+        ...getCameraAfterScreenDrag({ ...baseCamera, zoomLevel }, deltaX, deltaY),
         zoomLevel,
         pitch: getMapRevealPitch({
           basePitch: baseCamera.pitch,
@@ -106,7 +107,6 @@ export function useCameraPreviewGestures({
           perspectiveEnabled,
         }),
       }
-      previewPanCameraRef.current = previewCamera
       currentCameraRef.current = previewCamera
       // Engine shadow-tracks the drag so a later release blends out of the
       // gesture's velocity instead of jumping.
@@ -131,11 +131,10 @@ export function useCameraPreviewGestures({
     previewPanActiveRef.current = false
     previewPanFollowedRef.current = false
     previewPanBaseRef.current = null
-    previewPanCameraRef.current = null
-    // The drag committed to map mode and nothing retargets right away. Park the
-    // springs here, or the gesture's velocity would fling the next target
-    // whenever it arrives — seconds later.
-    engine.stop()
+    // The drag committed to map mode and nothing retargets right away. Coast
+    // the gesture's velocity out instead of stopping dead on the last sample,
+    // and leave the springs at rest so a later target starts fresh.
+    engine.release()
   }, [engine, previewPanActiveRef])
 
   const beginPreviewZoom = useCallback(() => {
@@ -172,7 +171,6 @@ export function useCameraPreviewGestures({
         : previewPanBaseRef.current
     previewPanFollowedRef.current = false
     previewPanBaseRef.current = null
-    previewPanCameraRef.current = null
     if (cameraFix) {
       lastFollowKeyRef.current = liveFollowKey(cameraFix.timestamp, restoreCamera)
     }

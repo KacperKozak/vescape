@@ -45,12 +45,7 @@ export interface MainMapHandle {
   recenterLive: (options?: { resetPadding?: boolean; animationDuration?: number }) => void
   previewHistorySession: (preview: HistoryPreviewTarget) => void
   beginPreviewPan: () => void
-  previewPanBy: (
-    deltaX: number,
-    deltaY: number,
-    animationDuration?: number,
-    revealProgress?: number,
-  ) => void
+  previewPanBy: (deltaX: number, deltaY: number, revealProgress: number) => void
   endPreviewPan: () => void
   beginPreviewZoom: () => void
   previewZoomBy: (scale: number) => void

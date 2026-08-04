@@ -193,6 +193,56 @@ describe('cameraEngine', () => {
     expect(engine.getCamera().centerCoordinate[0]).toBe(21.001)
   })
 
+  test('burst samples do not fabricate velocity', () => {
+    // Same finger travel per step, delivered either at a steady 16 ms or as a
+    // stalled thread draining four queued touches a millisecond apart.
+    const coastAfter = (steps: [gapMs: number, step: number][]) => {
+      const { engine, run, advance } = createTestEngine()
+      engine.reset(camera([21, 52]))
+      let longitude = 21
+      for (const [gapMs, step] of steps) {
+        longitude += step
+        advance(gapMs)
+        engine.driveExternal(camera([longitude, 52]))
+      }
+      engine.release()
+      run(1000)
+      return engine.getCamera().centerCoordinate[0] - longitude
+    }
+    const steady = coastAfter([
+      [16, 0.001],
+      [16, 0.0001],
+      [16, 0.0001],
+    ])
+    const bursty = coastAfter([
+      [16, 0.001],
+      [1, 0.000_025],
+      [1, 0.000_025],
+      [1, 0.000_025],
+      [1, 0.000_025],
+    ])
+    expect(bursty).toBeLessThanOrEqual(steady)
+  })
+
+  test('release coasts to rest without reversing', () => {
+    const { engine, frames, run, advance } = createTestEngine()
+    engine.reset(camera([21, 52]))
+    for (const longitude of [21.001, 21.002, 21.003]) {
+      advance(16)
+      engine.driveExternal(camera([longitude, 52]))
+    }
+    engine.release()
+    run(1000)
+    const drifted = frames.map((f) => f.centerCoordinate[0])
+    // Monotone: the glide always moves the way the finger was going.
+    for (let i = 1; i < drifted.length; i++) {
+      expect(drifted[i]!).toBeGreaterThanOrEqual(drifted[i - 1]! - 1e-12)
+    }
+    // And it actually coasts past the last sample before settling.
+    expect(engine.getCamera().centerCoordinate[0]).toBeGreaterThan(21.003)
+    expect(engine.isAnimating()).toBe(false)
+  })
+
   test('ballistic transit dips zoom out and returns it on arrival', () => {
     const { engine, frames, run } = createTestEngine({ teleportDistanceM: 100_000 })
     engine.reset(camera([21, 52], 16))

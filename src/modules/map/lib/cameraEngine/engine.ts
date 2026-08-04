@@ -90,6 +90,15 @@ function zoomToFitDistance(distanceM: number, latitudeDeg: number, fitPx: number
 }
 
 const MAX_FRAME_DT_S = 0.064
+/**
+ * Gesture samples closer together than this are coalesced: a stalled JS thread
+ * drains queued touch events in sub-millisecond bursts, and a delta divided by
+ * 1 ms reads as thousands of metres per second. The position still follows the
+ * finger; only the clock waits for a sample worth differentiating.
+ */
+const MIN_DRIVE_DT_S = 0.012
+/** Weight of the newest sample in the drive velocity estimate. */
+const DRIVE_VELOCITY_SMOOTHING = 0.35
 const CENTER_EPSILON_DEG = 1e-7
 const ZOOM_EPSILON = 1e-4
 const ANGLE_EPSILON_DEG = 1e-3
@@ -124,6 +133,12 @@ export interface CameraEngine {
    * velocity. The first sample after any retarget carries no velocity.
    */
   driveExternal: (camera: EngineCamera, dtSeconds?: number) => void
+  /**
+   * End a drive without a destination: each axis coasts to rest on its own
+   * velocity. Target is `x + v/ω`, the point a critically damped spring reaches
+   * without ever reversing — a glide, not a wall.
+   */
+  release: () => void
   /** Halt in place: park every spring where it is, kill velocity, stop the loop. */
   stop: () => void
   /** True while the frame loop is running. */
@@ -357,14 +372,24 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
     }
     stopLoop()
     const sampleMs = now()
+    const opening = lastDriveMs == null
     const dt =
-      dtSeconds ??
-      (lastDriveMs == null ? 0 : Math.min((sampleMs - lastDriveMs) / 1000, MAX_FRAME_DT_S))
-    lastDriveMs = sampleMs
+      dtSeconds ?? (opening ? 0 : Math.min((sampleMs - lastDriveMs!) / 1000, MAX_FRAME_DT_S))
+    // Burst samples leave the clock where it is, so the next real sample
+    // measures across the whole burst instead of one starved millisecond.
+    const timed = dt >= MIN_DRIVE_DT_S
+    if (opening || timed) lastDriveMs = sampleMs
     // The opening sample of a drive has no measurable velocity; parking on it
     // beats inheriting whatever the spring was doing before the gesture.
-    const drive = (spring: SpringState, x: number) =>
-      dt > 0 ? driveSpring(spring, x, dt) : snapSpring(spring, x)
+    const drive = (spring: SpringState, x: number): SpringState => {
+      if (opening) return snapSpring(spring, x)
+      if (!timed) return { x, v: spring.v, target: x }
+      const sampled = driveSpring(spring, x, dt)
+      return {
+        ...sampled,
+        v: spring.v + (sampled.v - spring.v) * DRIVE_VELOCITY_SMOOTHING,
+      }
+    }
     zoomUserTarget = camera.zoomLevel
     const s = springs
     springs = {
@@ -375,6 +400,24 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
       pitch: drive(s.pitch, camera.pitch),
       padding: eachPadding(s, camera.padding, drive),
     }
+  }
+
+  const release = () => {
+    if (!springs) return
+    lastDriveMs = null
+    const s = springs
+    const coast = (spring: SpringState, axisOmega: number) =>
+      retargetSpring(spring, spring.x + spring.v / axisOmega)
+    springs = {
+      lng: coast(s.lng, omega.center),
+      lat: coast(s.lat, omega.center),
+      zoom: coast(s.zoom, omega.zoom),
+      heading: coast(s.heading, omega.heading),
+      pitch: coast(s.pitch, omega.pitch),
+      padding: s.padding.map((p) => coast(p, omega.padding)) as EngineSprings['padding'],
+    }
+    zoomUserTarget = springs.zoom.target
+    ensureLoop()
   }
 
   const stop = () => {
@@ -398,6 +441,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
     setTarget,
     snap,
     driveExternal,
+    release,
     stop,
     isAnimating: () => frameHandle != null || emitting,
     getCamera: () => {
