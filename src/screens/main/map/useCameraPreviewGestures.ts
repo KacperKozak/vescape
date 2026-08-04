@@ -110,12 +110,15 @@ export function useCameraPreviewGestures({
       currentCameraRef.current = previewCamera
       // Engine shadow-tracks the drag so a later release blends out of the
       // gesture's velocity instead of jumping.
-      engine.driveExternal({
-        centerCoordinate: previewCamera.centerCoordinate,
-        zoomLevel: previewCamera.zoomLevel,
-        heading: previewCamera.heading,
-        pitch: previewCamera.pitch,
-      })
+      engine.driveExternal(
+        {
+          centerCoordinate: previewCamera.centerCoordinate,
+          zoomLevel: previewCamera.zoomLevel,
+          heading: previewCamera.heading,
+          pitch: previewCamera.pitch,
+        },
+        { gesture: true },
+      )
       cameraRef.current?.setCameraDirect({
         center: previewCamera.centerCoordinate,
         zoom: previewCamera.zoomLevel,

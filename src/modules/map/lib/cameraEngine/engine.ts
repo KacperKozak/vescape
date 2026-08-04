@@ -52,6 +52,18 @@ export interface CameraEngineConfig {
    * out-and-back arc for mid-distance jumps. Pass `false` to disable.
    */
   ballistic?: { fitPx?: number; minZoom?: number } | false
+  /**
+   * How long after a camera write the map's change events are still assumed to
+   * be echoes of it. Non-gesture `driveExternal` samples inside the window are
+   * discarded. See `driveExternal`.
+   */
+  echoWindowMs?: number
+  /**
+   * A drive sample this far (in screen pixels) from the previous one is a
+   * reposition, not motion — velocity is not derived across it. See
+   * `driveExternal`.
+   */
+  maxDriveJumpPx?: number
   /** Injectable for tests. Defaults to requestAnimationFrame. */
   scheduleFrame?: (callback: (timestampMs: number) => void) => number
   cancelFrame?: (handle: number) => void
@@ -78,15 +90,24 @@ export const CAMERA_ENGINE_DEFAULT_OMEGA: CameraEngineOmega = {
 export const CAMERA_ENGINE_DEFAULT_TELEPORT_DISTANCE_M = 10_000
 export const CAMERA_ENGINE_DEFAULT_BALLISTIC_FIT_PX = 320
 export const CAMERA_ENGINE_DEFAULT_BALLISTIC_MIN_ZOOM = 3
+const CAMERA_ENGINE_DEFAULT_ECHO_WINDOW_MS = 300
+const CAMERA_ENGINE_DEFAULT_MAX_DRIVE_JUMP_PX = 200
 
 /** Web-mercator meters per pixel at zoom 0 (256px tiles). */
 const METERS_PER_PIXEL_ZOOM_0 = 156_543.033_92
 
+function metersPerPixelAtZoom0(latitudeDeg: number): number {
+  return METERS_PER_PIXEL_ZOOM_0 * Math.cos((latitudeDeg * Math.PI) / 180)
+}
+
+function metersPerPixel(latitudeDeg: number, zoom: number): number {
+  return metersPerPixelAtZoom0(latitudeDeg) / 2 ** zoom
+}
+
 /** Zoom at which `distanceM` spans `fitPx` screen pixels at this latitude. */
 function zoomToFitDistance(distanceM: number, latitudeDeg: number, fitPx: number): number {
   if (distanceM <= 0) return Number.POSITIVE_INFINITY
-  const metersPerPixelAtZoom0 = METERS_PER_PIXEL_ZOOM_0 * Math.cos((latitudeDeg * Math.PI) / 180)
-  return Math.log2((metersPerPixelAtZoom0 * fitPx) / distanceM)
+  return Math.log2((metersPerPixelAtZoom0(latitudeDeg) * fitPx) / distanceM)
 }
 
 const MAX_FRAME_DT_S = 0.064
@@ -105,6 +126,13 @@ const ANGLE_EPSILON_DEG = 1e-3
 const PADDING_EPSILON_PX = 0.1
 
 const PADDING_KEYS = ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'] as const
+
+export interface DriveOptions {
+  /** Sample interval; omit to let the engine time samples itself. */
+  dtSeconds?: number
+  /** A finger is driving. Gesture samples are always trusted. */
+  gesture?: boolean
+}
 
 interface EngineSprings {
   lng: SpringState
@@ -131,8 +159,12 @@ export interface CameraEngine {
    * Omit `dtSeconds` to have the engine time the samples itself — gesture
    * callbacks do not arrive at frame rate, and a wrong dt scales the release
    * velocity. The first sample after any retarget carries no velocity.
+   *
+   * Pass `gesture: true` when a finger is on the screen. Without it the sample
+   * is assumed to be the map mirroring a camera write back at us, and is
+   * discarded while an echo could still be in flight.
    */
-  driveExternal: (camera: EngineCamera, dtSeconds?: number) => void
+  driveExternal: (camera: EngineCamera, options?: DriveOptions) => void
   /**
    * End a drive without a destination: each axis coasts to rest on its own
    * velocity. Target is `x + v/ω`, the point a critically damped spring reaches
@@ -150,6 +182,8 @@ export interface CameraEngine {
 export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
   const omega: CameraEngineOmega = { ...CAMERA_ENGINE_DEFAULT_OMEGA, ...config.omega }
   const teleportDistanceM = config.teleportDistanceM ?? CAMERA_ENGINE_DEFAULT_TELEPORT_DISTANCE_M
+  const echoWindowMs = config.echoWindowMs ?? CAMERA_ENGINE_DEFAULT_ECHO_WINDOW_MS
+  const maxDriveJumpPx = config.maxDriveJumpPx ?? CAMERA_ENGINE_DEFAULT_MAX_DRIVE_JUMP_PX
   const scheduleFrame =
     config.scheduleFrame ?? ((callback) => requestAnimationFrame(callback) as unknown as number)
   const cancelFrame =
@@ -177,6 +211,8 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
    */
   let emitting = false
   let destroyed = false
+  /** When the engine last wrote the camera; echoes of that write follow it. */
+  let lastEmitMs = Number.NEGATIVE_INFINITY
   const now = config.now ?? (() => Date.now())
 
   const toCamera = (s: EngineSprings): EngineCamera => ({
@@ -217,6 +253,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
       config.applyFrame(toCamera(s))
     } finally {
       emitting = false
+      lastEmitMs = now()
     }
   }
 
@@ -225,6 +262,12 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
     frameHandle = null
     lastFrameMs = null
   }
+
+  const centerDistanceToTargetM = (s: EngineSprings) =>
+    distanceMeters(
+      { longitude: s.lng.x, latitude: s.lat.x },
+      { longitude: s.lng.target, latitude: s.lat.target },
+    )
 
   const frame = (timestampMs: number) => {
     frameHandle = null
@@ -237,10 +280,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
 
     let s = springs
     if (ballistic) {
-      const remainingM = distanceMeters(
-        { longitude: s.lng.x, latitude: s.lat.x },
-        { longitude: s.lng.target, latitude: s.lat.target },
-      )
+      const remainingM = centerDistanceToTargetM(s)
       const fitZoom = zoomToFitDistance(remainingM, s.lat.x, ballistic.fitPx)
       s.zoom = retargetSpring(
         s.zoom,
@@ -364,15 +404,41 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
     ensureLoop()
   }
 
-  const driveExternal = (camera: EngineCamera, dtSeconds?: number) => {
+  const driveExternal = (camera: EngineCamera, options?: DriveOptions) => {
     if (emitting) return
     if (!springs) {
       reset(camera)
       return
     }
-    stopLoop()
     const sampleMs = now()
-    const opening = lastDriveMs == null
+    // The map answers every camera write with a change event, and that echo
+    // arrives a frame or more later — long after the synchronous `emitting`
+    // guard has closed. Two echoes straddling one write (the stale camera, then
+    // the written one) differentiate into the engine's own jump: a teleport
+    // reads as tens of degrees per second, and the next retarget launches at
+    // that speed. Worse, a stale echo moves the springs backwards, so the
+    // teleport test in `setTarget` measures from the wrong place and the same
+    // A→B sometimes snaps and sometimes crawls. A finger is authoritative and
+    // always passes; anything else waits for the echoes to drain.
+    if (!options?.gesture && sampleMs - lastEmitMs < echoWindowMs) {
+      lastDriveMs = null
+      return
+    }
+    stopLoop()
+    const dtSeconds = options?.dtSeconds
+    // Velocity is a derivative, so it only means anything across samples of one
+    // continuous motion. A sample that jumps further than a finger could travel
+    // is someone repositioning the camera, not moving it: take the position and
+    // start a fresh drive rather than differentiating across the discontinuity.
+    // This is what survives a stalled JS thread, where an echo can outlive the
+    // window above.
+    const jumpPx =
+      distanceMeters(
+        { longitude: springs.lng.x, latitude: springs.lat.x },
+        { longitude: camera.centerCoordinate[0], latitude: camera.centerCoordinate[1] },
+      ) / metersPerPixel(springs.lat.x, springs.zoom.x)
+    const repositioned = jumpPx > maxDriveJumpPx
+    const opening = lastDriveMs == null || repositioned
     const dt =
       dtSeconds ?? (opening ? 0 : Math.min((sampleMs - lastDriveMs!) / 1000, MAX_FRAME_DT_S))
     // Burst samples leave the clock where it is, so the next real sample

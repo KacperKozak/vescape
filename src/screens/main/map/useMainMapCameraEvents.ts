@@ -154,10 +154,12 @@ export function useMainMapCameraEvents({
       const previewPanActive = previewPanActiveRef.current
       if (!previewPanActive) currentCameraRef.current = camera
       // While a native gesture (or any non-engine mover) owns the camera, the
-      // engine shadow-tracks it so its next target blends from here. While the
-      // engine itself animates, its own echoes are skipped.
-      if (!previewPanActive && (state.gestures.isGestureActive || !engine.isAnimating())) {
-        engine.driveExternal(camera)
+      // engine shadow-tracks it so its next target blends from here. Telling it
+      // whether a finger is down is the whole filter: the engine discards the
+      // echoes of its own writes itself, which it can do accurately and this
+      // callback cannot.
+      if (!previewPanActive) {
+        engine.driveExternal(camera, { gesture: state.gestures.isGestureActive })
       }
       repositionOffscreenIndicatorsForCamera(camera)
       const [targetLongitude, targetLatitude] = gpsCameraCenter
