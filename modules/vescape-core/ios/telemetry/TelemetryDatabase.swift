@@ -107,6 +107,29 @@ enum TelemetryDatabase {
     }
   }
 
+  /// Bridge the places where the two platforms hold the same fact in different shapes. Stamping
+  /// tells the migrator an incoming Room database is up to date, which it is — for Android. Where
+  /// iOS keeps something Android files elsewhere, nothing else will ever add it, so it is added
+  /// here. Every future divergence belongs in this function.
+  ///
+  /// Today that is one column: a Board's proven transport is a column on `boards` here and a
+  /// `board_settings` row there.
+  ///
+  /// Internal, not private, so the migration tests can reconcile a database the way a restore does.
+  internal static func reconcileForeignSchema(_ db: Database) throws {
+    guard try db.tableExists("boards"),
+          try !db.columns(in: "boards").contains(where: { $0.name == "transport" })
+    else { return }
+    try db.execute(sql: "ALTER TABLE boards ADD COLUMN transport TEXT")
+    // `value_json` is a JSON string ("direct" or a CAN id) and the column stores it bare.
+    try db.execute(sql: """
+      UPDATE boards SET transport = (
+        SELECT TRIM(value_json, '"') FROM board_settings
+        WHERE board_settings.board_id = boards.id AND board_settings.key = 'transport'
+      )
+      """)
+  }
+
   /// Hot-swap the database file with a validated restore, closing the live pool so SQLite releases
   /// the file + WAL sidecars, then reopening (and migrating) at the same path. On any failure the
   /// previous file is rolled back so the app is never left without a database.
@@ -141,6 +164,7 @@ enum TelemetryDatabase {
       try pool.write { db in
         guard try !db.tableExists(migrationLedgerTable) else { return }
         try stampAppliedMigrations(db, schemaVersion: schemaVersion)
+        try reconcileForeignSchema(db)
       }
       try migrator.migrate(pool)
       try pool.read { db in _ = try Int.fetchOne(db, sql: "SELECT 1") }

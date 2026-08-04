@@ -176,6 +176,48 @@ final class TelemetryMigrationTests: XCTestCase {
     XCTAssertEqual(try applied(), Set(TelemetryDatabase.migrator.migrations))
   }
 
+  /// Android files a Board's proven transport as a `board_settings` row; iOS keeps it as a column on
+  /// `boards`. Rebuild the table without it, the way a restored Room database arrives.
+  private func replaceBoardsWithAndroidShape() throws {
+    try queue.write { db in
+      try db.execute(sql: "DROP TABLE boards")
+      try db.execute(sql: """
+        CREATE TABLE boards (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          ble_id TEXT,
+          created_at INTEGER NOT NULL
+        )
+        """)
+      try db.execute(
+        sql: "INSERT INTO boards (id, name, ble_id, created_at) VALUES ('board-1', 'Thor301', 'A1:B2', 1000)"
+      )
+      try db.execute(sql: """
+        INSERT INTO board_settings (board_id, key, value_json, updated_at)
+        VALUES ('board-1', 'transport', '"98"', 1000)
+        """)
+    }
+  }
+
+  /// Without this the restore "succeeded" and every board query threw on the missing column —
+  /// swallowed by the repository's fallback, so the app showed "No board" with a full database.
+  func testAndroidBoardsGainTheTransportColumnFromItsSetting() throws {
+    try migrate()
+    try replaceBoardsWithAndroidShape()
+    try dropMigrationLedger()
+
+    try queue.write { db in
+      try TelemetryDatabase.stampAppliedMigrations(db, schemaVersion: TELEMETRY_SCHEMA_VERSION)
+      try TelemetryDatabase.reconcileForeignSchema(db)
+    }
+
+    XCTAssertTrue(try columnNames("boards").contains("transport"))
+    let transport = try queue.read { db in
+      try String.fetchOne(db, sql: "SELECT transport FROM boards WHERE id = 'board-1'")
+    }
+    XCTAssertEqual(transport, "98")
+  }
+
   func testBoardIdMigrationKeepsAlreadyBoardOwnedRules() throws {
     try migrate(upTo: "v26_alert_source")
     try queue.write { db in
