@@ -1103,6 +1103,21 @@ export interface DebugFixture {
  */
 export const REPLAY_BOARD_ID_PREFIX = 'replay:'
 
+/**
+ * Opt-in fast-forward for the opening stretch of a replay, so a session can come up with its live
+ * charts already filled instead of spending real minutes earning them. Omitted entirely, a replay
+ * runs the whole recording at 1×.
+ *
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/replay/ReplayClock.kt
+ * @parity /modules/vescape-core/ios/replay/ReplayClock.swift
+ */
+export interface DebugReplayOptions {
+  /** How much of the recording plays faster than real time. `0` (default) is a plain 1× replay. */
+  warmupMs?: number
+  /** How much faster than real time that window is delivered. Default `1`. */
+  warmupSpeed?: number
+}
+
 /** Whether a connected board id belongs to a dev-mode replay session. */
 export function isReplayBoardId(boardId: string | null | undefined): boolean {
   return boardId?.startsWith(REPLAY_BOARD_ID_PREFIX) ?? false
@@ -1414,6 +1429,7 @@ type VescapeCoreEvents = {
   onBms: (event: BmsEvent) => void
   onBmsSeries: (event: NativeBmsSeriesEvent) => void
   onLocation: (event: LocationEvent) => void
+  onReplayPhoneHeading: (event: { headingDeg: number }) => void
   onTelemetryRebuildProgress: (event: TelemetryRebuildProgressEvent) => void
   onBoardProbeProgress: (event: BoardProbeProgressEvent) => void
   /** Observe WebSocket connection state to the Group Ride relay. */
@@ -1486,7 +1502,8 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   listBundledDebugFixtures(): Promise<DebugFixture[]>
   exportDebugRecording(name: string): Promise<DatabaseBackupResult>
   deleteDebugRecording(name: string): Promise<void>
-  startDebugReplay(name: string): Promise<void>
+  startDebugReplay(name: string, options: DebugReplayOptions | null): Promise<void>
+  recordPhoneHeading(headingDeg: number): void
   stopDebugReplay(): Promise<void>
   reportUiError(message: string, source?: string | null, stack?: string | null): void
   reportDiagnosticTest(): DiagnosticStatus
@@ -1904,9 +1921,14 @@ export async function deleteDebugRecording(name: string): Promise<void> {
 /**
  * Dev mode: replay a Debug Recording through the real native session stack under a synthetic
  * `replay:<name>` board id (ADR 0024). Ends like a disconnect when the recording runs out.
+ *
+ * Defaults to 1× — the recording plays back exactly as the ride happened, which is what the Replay
+ * UI wants. Pass a warmup to trade that off for a session that starts with its live charts already
+ * filled: `warmupMs` of the recording is delivered `warmupSpeed` times faster than real time before
+ * playback settles to 1×.
  */
-export async function startDebugReplay(name: string): Promise<void> {
-  return native.startDebugReplay(name)
+export async function startDebugReplay(name: string, options?: DebugReplayOptions): Promise<void> {
+  return native.startDebugReplay(name, options ?? null)
 }
 
 /** Dev mode: stop an active Debug Recording replay session (normal disconnect). */
@@ -2506,6 +2528,33 @@ export function addBmsSeriesListener(cb: (event: BmsSeriesUpdate) => void): Even
 
 export function addLocationListener(cb: (event: LocationEvent) => void): EventSubscription {
   return emitter.addListener('onLocation', cb)
+}
+
+/**
+ * Compass readings replayed from a Debug Recording, in place of the phone's own magnetometer.
+ *
+ * The sensor is read in JS, so native can neither observe it nor apply it — it only stores and
+ * replays it. A replay feeds these back in at the sensor boundary so every compass-driven feature
+ * runs its real code path against the rotation the rider's phone actually measured.
+ *
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `onReplayHeading`
+ * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `onReplayHeading`
+ */
+export function addReplayPhoneHeadingListener(
+  cb: (event: { headingDeg: number }) => void,
+): EventSubscription {
+  return emitter.addListener('onReplayPhoneHeading', cb)
+}
+
+/**
+ * Offer a compass reading to whatever Debug Recording is running; native drops it when nothing is
+ * recording. Safe (and intended) to call unconditionally while the map's heading layer is live.
+ *
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `recordPhoneHeading`
+ * @parity /modules/vescape-core/ios/VescapeCoreModule.swift `recordPhoneHeading`
+ */
+export function recordPhoneHeading(headingDeg: number): void {
+  native.recordPhoneHeading(headingDeg)
 }
 
 export function addTelemetryRebuildProgressListener(

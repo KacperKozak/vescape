@@ -54,7 +54,7 @@ import expo.modules.vescapecore.protocol.SessionTransport
 import expo.modules.vescapecore.protocol.VescGattClient
 import expo.modules.vescapecore.protocol.VescGattListener
 import expo.modules.vescapecore.replay.ReplayLocation
-import expo.modules.vescapecore.replay.REPLAY_WARMUP_MS
+import expo.modules.vescapecore.replay.ReplayHeading
 import expo.modules.vescapecore.replay.ReplayClock
 import expo.modules.vescapecore.replay.ReplayTransport
 import expo.modules.vescapecore.VescLiveStateSnapshot
@@ -269,6 +269,7 @@ internal class BoardSessionController(private val service: CoreForegroundService
             historyFlushIntervalMs = HISTORY_FLUSH_INTERVAL_MS,
             liveSeriesIntervalMs = LIVE_SERIES_INTERVAL_MS,
             liveSeriesBuckets = LIVE_SERIES_BUCKETS,
+            speed = { sessionClock.speed },
         )
     }
     private val watchPusher by lazy {
@@ -921,7 +922,11 @@ private var wearAutoLaunchOnConnect = true
                 listener = gattListener,
                 dispatchListener = ::dispatchGattEvent,
                 onLocation = ::onReplayLocation,
-                clock = ReplayClock(REPLAY_WARMUP_MS),
+                onHeading = ::onReplayHeading,
+                clock = ReplayClock(
+                    warmupMs = start.boardConfig.replayWarmupMs,
+                    warmupSpeed = start.boardConfig.replayWarmupSpeed,
+                ),
             )
         }
         // A replay owns the session's notion of time for its lifetime.
@@ -2001,6 +2006,11 @@ private var wearAutoLaunchOnConnect = true
         gpsMonitor.stop()
     }
 
+    /** @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `recordPhoneHeading` */
+    fun recordPhoneHeading(headingDeg: Double) {
+        recordingCoordinator.currentRecorder()?.recordPhoneHeading(headingDeg)
+    }
+
     fun setTelemetryRecordingEnabled(enabled: Boolean) {
         val session = boardConfig
         if (enabled) {
@@ -2043,13 +2053,29 @@ private var wearAutoLaunchOnConnect = true
             latitude = fix.latitude
             longitude = fix.longitude
             time = nowMs()
-            elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
+            // Shifted alongside `time` rather than read raw: a replay's session clock can sit
+            // minutes behind wall time, and a `Location` carrying one field from each timeline is a
+            // trap for whoever first computes a fix age from the monotonic one.
+            elapsedRealtimeNanos =
+                SystemClock.elapsedRealtimeNanos() -
+                    (System.currentTimeMillis() - nowMs()) * 1_000_000
             fix.speedMps?.let { speed = it }
             fix.bearingDeg?.let { bearing = it }
             fix.accuracyM?.let { accuracy = it }
             fix.altitudeM?.let { altitude = it }
         }
         onLocationUpdated(location)
+    }
+
+    /**
+     * Hand a recorded compass reading back to JS, which owns the magnetometer and therefore has to
+     * be the one to feed it into the map. Emitted rather than applied natively for the same reason
+     * it was recorded from JS: the sensor lives there.
+     *
+     * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `onReplayHeading`
+     */
+    private fun onReplayHeading(heading: ReplayHeading) {
+        emitEvent("onReplayPhoneHeading", mapOf("headingDeg" to heading.headingDeg))
     }
 
     private fun onLocationUpdated(location: Location) {

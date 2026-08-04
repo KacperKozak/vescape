@@ -81,6 +81,14 @@ export function deadBandPhoneHeading(previous: number | null, next: number): num
   return smoothed
 }
 
+/**
+ * No camera animation while a heading mode is following.
+ *
+ * `setCameraDirect` writes the camera immediately, bypassing the transition queue, so the heading
+ * pushes in `PhoneHeadingMapLayer` cancel any centre animation within a frame or two of it starting.
+ * The camera cannot ease and be written directly at sensor rate at the same time — see issue #331,
+ * which covers giving one writer ownership so the map can actually move smoothly.
+ */
 export function phoneHeadingAnimationDuration(): number {
   return 0
 }

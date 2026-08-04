@@ -18,15 +18,19 @@
  *
  * The hero panel is captured last, on purpose. `TelemetryPipeline.liveSeries` buckets the sparkline
  * over `liveHistoryLimit` minutes of *receipt* timestamps, so filling it takes that much session
- * time. Replay warmup provides the first `REPLAY_WARMUP_MINUTES` of it up front — playing fast
- * against a clock shifted into the past, which fills the window rather than compressing the samples
- * into a fraction of it — and the run only waits out whatever window is left beyond that. The replay
- * recording must be at least as long as the whole run.
+ * time. Replay warmup provides the opening stretch up front — session time runs faster than real
+ * time, so the samples are stamped across the window they actually span instead of being squeezed
+ * into the seconds it took to deliver them — and the run only waits out whatever is left beyond
+ * that. The replay recording must be at least as long as the whole run.
  */
 import { mkdirSync, readdirSync } from 'fs'
 import { basename, join } from 'path'
 
 import { applicationId } from '../src/config/appVariant.ts'
+import {
+  SCREENSHOT_REPLAY_WARMUP_MS,
+  SCREENSHOT_REPLAY_WARMUP_WALL_MS,
+} from '../src/config/screenshotWarmup.ts'
 import { createAndroidDriver } from './lib/androidCapture.ts'
 import { ROOT, runOrDie, type CaptureDriver, type CapturePlatform } from './lib/captureDriver.ts'
 import { createIosDriver } from './lib/iosCapture.ts'
@@ -40,13 +44,6 @@ const PLATFORMS: CapturePlatform[] = ['android', 'ios']
 const DEFAULT_REPLAY = 'replay-thor301.jsonl'
 /** `AppSettings.liveHistoryLimit` default — the sparkline window the hero panel has to fill. */
 const DEFAULT_SPARKLINE_MINUTES = 5
-/**
- * How much of that window a replay hands over already filled, from its warmup.
- *
- * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/replay/ReplayTransport.kt `REPLAY_WARMUP_MS`
- * @parity /modules/vescape-core/ios/replay/ReplayClock.swift `replayWarmupMs`
- */
-const REPLAY_WARMUP_MINUTES = 3
 
 interface Args {
   /** `null` until the picker runs — `--platform` skips it. */
@@ -194,7 +191,11 @@ async function capturePlatform(platform: CapturePlatform, args: Args): Promise<v
     for (const file of rest) await runFlow(file, driver)
 
     if (hero.length > 0 && !args.noWait) {
-      const toFillMs = Math.max(0, args.sparklineMinutes - REPLAY_WARMUP_MINUTES) * 60_000
+      // The warmup hands over its window already filled, but delivering it costs real seconds of
+      // its own — the run has to wait out the rest of the window *plus* that.
+      const toFillMs =
+        Math.max(0, args.sparklineMinutes * 60_000 - SCREENSHOT_REPLAY_WARMUP_MS) +
+        SCREENSHOT_REPLAY_WARMUP_WALL_MS
       const remainingMs = toFillMs - (Date.now() - bootedAt)
       if (remainingMs > 0) {
         console.log(`› Waiting ${Math.ceil(remainingMs / 1000)}s for the sparkline window to fill…`)
