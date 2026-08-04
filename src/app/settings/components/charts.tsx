@@ -10,6 +10,7 @@ import { IconHero } from '@/components/settings/IconHero'
 import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
 import { computeAutoRange, type TelemetryChartPoint } from '@/components/charts/chartMath'
 import { SingleGauge } from '@/modules/board/components/SingleGauge'
+import { DualGauge } from '@/modules/board/components/DualGauge'
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { BmsCellVoltagesView } from '@/modules/battery/components/BmsCellVoltages'
 import { summarizeBms, summarizeBmsWindow } from '@/modules/battery/lib'
@@ -188,6 +189,52 @@ function AnimatedSingleGaugeShowcase() {
             thresholdMax: metric.chartRange.max * 0.98,
           },
         ]}
+      />
+    </ShowcaseCard>
+  )
+}
+
+function AnimatedDualGaugeShowcase() {
+  const [split, setSplit] = useState(false)
+  const [compact, setCompact] = useState(false)
+  const speed = useSharedValue<number | null>(0)
+  const duty = useSharedValue<number | null>(0)
+
+  const speedSeries = useMemo(() => generateSparklineData(60, 28, 6, 11), [])
+  const dutySeries = useMemo(() => generateSparklineData(60, 55, 14, 23), [])
+
+  useEffect(() => {
+    speed.value = withRepeat(
+      withTiming(50, { duration: 2600, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    )
+    duty.value = withRepeat(
+      withTiming(100, { duration: 1700, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    )
+  }, [duty, speed])
+
+  return (
+    <ShowcaseCard
+      name="DualGauge / animated ramp"
+      controls={
+        <>
+          <ToggleRow label="split" value={split} onToggle={setSplit} />
+          <ToggleRow label="compact" value={compact} onToggle={setCompact} />
+        </>
+      }
+    >
+      <DualGauge
+        speedValue={speed}
+        dutyValue={duty}
+        speedSeries={speedSeries}
+        dutySeries={dutySeries}
+        split={split}
+        compact={compact}
+        speedAlerts={[{ id: 'speed-warn', threshold: 42, thresholdMax: null }]}
+        dutyAlerts={[{ id: 'duty-warn', threshold: 80, thresholdMax: 95 }]}
       />
     </ShowcaseCard>
   )
@@ -447,11 +494,12 @@ export default function ChartsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={ChartLineUpIcon}
-          description="Sparkline, LinearGauge, SingleGauge, TelemetryLineChart, BmsCellVoltages."
+          description="Sparkline, LinearGauge, SingleGauge, DualGauge, TelemetryLineChart, BmsCellVoltages."
         />
         <SparklineShowcase />
         <LinearGaugeShowcase />
         <AnimatedSingleGaugeShowcase />
+        <AnimatedDualGaugeShowcase />
         <RandomLineChartsShowcase />
         <TrimChartShowcase />
         <BmsCellVoltagesShowcase />

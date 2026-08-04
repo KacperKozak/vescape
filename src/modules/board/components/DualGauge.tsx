@@ -4,7 +4,6 @@ import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { Canvas, Group, Path } from '@shopify/react-native-skia'
 
-import { Text } from '@/components/base/Text'
 import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
 import { SparklineMaxBadge, type SparklinePoint } from '@/components/charts/Sparkline'
 import { buildSparklinePaths, SparklineLayer } from '@/components/charts/SparklineLayer'
@@ -24,14 +23,15 @@ import {
   wedgePath,
   type Arc,
 } from '@/modules/board/components/gauge/arcGeometry'
-import { MonoValue } from '@/components/base/MonoValue'
 import {
   AlertMarker,
   BG_ARC_COLOR,
   gaugeRampColor,
+  GaugeReadout,
   GlowGradient,
-  useCanvasSize,
+  type GaugeReadoutBox,
 } from '@/modules/board/components/gauge/gaugeShared'
+import { useCanvasSize } from '@/hooks/useCanvasSize'
 
 interface DualGaugeProps {
   speedValue: SharedValue<number | null>
@@ -59,10 +59,11 @@ const MARKER_INSET = 10
 const LEFT_ARC: Arc = { cx: 100, cy: 100, r: R, from: Math.PI, to: Math.PI / 2 }
 const RIGHT_ARC: Arc = { cx: 10, cy: 100, r: R, from: 0, to: Math.PI / 2 }
 
-// Readout box: line height is set explicitly so the Skia canvas keeps the same
-// vertical footprint the TextInput's `lineHeight` used to reserve.
+// Readout box: line height is set explicitly so the drawn value keeps the same
+// vertical footprint the readout view used to reserve.
 const VALUE_FONT_SIZE = 36
 const VALUE_LINE_HEIGHT = 40
+const UNIT_FONT_SIZE = 10
 
 // Cropped viewBox per side — removes empty space so arc fills container width
 const CROP_PAD = 1
@@ -154,34 +155,28 @@ function QuarterArcLayer({
   )
 }
 
-function GaugeValue({
-  side,
+function GaugeValueLayer({
   value,
   color,
   hotRange,
   unit,
-  bounds,
-}: QuarterArcProps & { bounds: { top: number; bottom: number } }) {
+  box,
+}: Omit<QuarterArcProps, 'side' | 'max'> & { box: GaugeReadoutBox }) {
   const valueText = useDerivedValue(() => {
     const current = value.value
     return current != null ? Math.round(current).toString() : '—'
   })
   const valueColor = useDerivedValue(() => gaugeRampColor(value.value, color, hotRange))
   return (
-    <View
-      style={[side === 'left' ? styles.bowlLeft : styles.bowlRight, bounds]}
-      pointerEvents="none"
-    >
-      <MonoValue
-        text={valueText}
-        size={VALUE_FONT_SIZE}
-        height={VALUE_LINE_HEIGHT}
-        color={valueColor}
-        align="center"
-        style={styles.value}
-      />
-      <Text style={styles.unit}>{unit}</Text>
-    </View>
+    <GaugeReadout
+      text={valueText}
+      color={valueColor}
+      unit={unit}
+      box={box}
+      valueSize={VALUE_FONT_SIZE}
+      valueLineHeight={VALUE_LINE_HEIGHT}
+      unitSize={UNIT_FONT_SIZE}
+    />
   )
 }
 
@@ -251,9 +246,13 @@ function GaugePair({
     ],
     [cellWidth, scale],
   )
-  const valueBounds = {
-    top: SPARKLINE_HEIGHT + SPARKLINE_TOP + gaugeHeight * 0.1,
-    bottom: gaugeHeight * 0.05,
+  // Bowls the readouts are centered in, in canvas pixels. They used to be
+  // percentage-positioned overlay views; the numbers match those percentages.
+  const bowlTop = SPARKLINE_HEIGHT + SPARKLINE_TOP + gaugeHeight * 0.1
+  const bowl = {
+    y: bowlTop,
+    width: size.w * 0.4,
+    height: size.h - bowlTop - gaugeHeight * 0.05,
   }
   return (
     <View style={styles.gaugePair} onLayout={onLayout}>
@@ -287,26 +286,22 @@ function GaugePair({
             hotRange={dutyHotRange}
             transform={rightTransform}
           />
+          <GaugeValueLayer
+            value={speedValue}
+            color={telemetry.speed.color}
+            unit="km/h"
+            hotRange={speedHotRange}
+            box={{ ...bowl, x: size.w * 0.05 }}
+          />
+          <GaugeValueLayer
+            value={dutyValue}
+            color={telemetry.duty.color}
+            unit="%"
+            hotRange={dutyHotRange}
+            box={{ ...bowl, x: size.w * 0.55 }}
+          />
         </Canvas>
       ) : null}
-      <GaugeValue
-        side="left"
-        value={speedValue}
-        max={speedMax}
-        color={telemetry.speed.color}
-        unit="km/h"
-        hotRange={speedHotRange}
-        bounds={valueBounds}
-      />
-      <GaugeValue
-        side="right"
-        value={dutyValue}
-        max={dutyMax}
-        color={telemetry.duty.color}
-        unit="%"
-        hotRange={dutyHotRange}
-        bounds={valueBounds}
-      />
     </View>
   )
 }
@@ -425,32 +420,5 @@ const styles = StyleSheet.create({
   svg: {
     width: '100%',
     height: '100%',
-  },
-  bowlLeft: {
-    position: 'absolute',
-    left: '5%',
-    right: '55%',
-    top: '10%',
-    bottom: '5%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bowlRight: {
-    position: 'absolute',
-    left: '55%',
-    right: '5%',
-    top: '10%',
-    bottom: '5%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  value: {
-    alignSelf: 'stretch',
-  },
-  unit: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 10,
-    textAlign: 'center',
-    marginTop: 2,
   },
 })

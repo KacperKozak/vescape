@@ -3,7 +3,6 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 import { Canvas, Group, Path } from '@shopify/react-native-skia'
 
-import { MonoValue } from '@/components/base/MonoValue'
 import { Text } from '@/components/base/Text'
 import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
 import { theme, type AlphaLevel } from '@/constants/theme'
@@ -22,10 +21,11 @@ import {
   AlertMarker,
   BG_ARC_COLOR,
   gaugeRampColor,
+  GaugeReadout,
   GlowGradient,
   LABEL_FONT_SIZE,
-  useCanvasSize,
 } from '@/modules/board/components/gauge/gaugeShared'
+import { useCanvasSize } from '@/hooks/useCanvasSize'
 
 interface SingleGaugeProps {
   value: SharedValue<number | null>
@@ -54,10 +54,11 @@ const GLOW_OPACITIES: AlphaLevel[] = [0, 0, 0.12, 0.3]
 
 const BG_ARC = svgPath(arcPath(HALF_ARC, 1))
 
-// Readout box: explicit line height keeps the Skia canvas at the vertical
-// footprint the TextInput's `lineHeight` used to reserve.
+// Readout box: explicit line height keeps the drawn value at the vertical
+// footprint the readout view used to reserve.
 const HALF_VALUE_FONT_SIZE = 52
 const HALF_VALUE_LINE_HEIGHT = 58
+const HALF_UNIT_FONT_SIZE = 12
 
 function HalfArc({
   value,
@@ -144,23 +145,25 @@ function HalfArc({
                 />
               ) : null}
             </Group>
+            {showValue ? (
+              <GaugeReadout
+                text={valueText}
+                color={valueColor}
+                unit={unit}
+                box={{
+                  x: size.w * 0.18,
+                  y: size.h * 0.36,
+                  width: size.w * 0.64,
+                  height: size.h * 0.6,
+                }}
+                valueSize={HALF_VALUE_FONT_SIZE}
+                valueLineHeight={HALF_VALUE_LINE_HEIGHT}
+                unitSize={HALF_UNIT_FONT_SIZE}
+              />
+            ) : null}
           </Canvas>
         ) : null}
       </View>
-
-      {showValue ? (
-        <View style={styles.halfBowl} pointerEvents="none">
-          <MonoValue
-            text={valueText}
-            size={HALF_VALUE_FONT_SIZE}
-            height={HALF_VALUE_LINE_HEIGHT}
-            color={valueColor}
-            align="center"
-            style={styles.halfValue}
-          />
-          <Text style={styles.halfUnit}>{unit}</Text>
-        </View>
-      ) : null}
     </View>
   )
 }
@@ -233,23 +236,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
-  },
-  halfBowl: {
-    position: 'absolute',
-    left: '18%',
-    right: '18%',
-    top: '36%',
-    bottom: '4%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  halfValue: {
-    alignSelf: 'stretch',
-  },
-  halfUnit: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 2,
   },
 })
