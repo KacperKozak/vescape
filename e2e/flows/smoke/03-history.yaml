@@ -52,5 +52,13 @@ appId: ${APP_ID}
 # sheet content and the sheet stays open, leaving the run stranded on History.
 - tapOn:
     point: 50%, 80%
+# Wait for the sheet to be *gone*, not just tapped. It slides out over several frames, and while any
+# of it is still on screen it covers the header — so `history-back` is not visible, every branch in
+# `_home.yaml` skips, and the run dies on `battery-bar` with History still underneath. Asserting the
+# sheet's absence is the only thing that makes the handover deterministic.
+- extendedWaitUntil:
+    notVisible:
+      id: history-session-sheet
+    timeout: 15000
 
 - runFlow: ../fixture/_home.yaml
