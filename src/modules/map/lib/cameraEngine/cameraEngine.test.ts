@@ -61,6 +61,7 @@ const createTestEngine = (options?: {
   teleportDistanceM?: number
   echoWindowMs?: number
   maxDriveJumpPx?: number
+  holdAfterTargetMs?: number
 }) => {
   const frames: EngineCamera[] = []
   let pending: ((timestampMs: number) => void) | null = null
@@ -70,6 +71,7 @@ const createTestEngine = (options?: {
     teleportDistanceM: options?.teleportDistanceM,
     echoWindowMs: options?.echoWindowMs,
     maxDriveJumpPx: options?.maxDriveJumpPx,
+    holdAfterTargetMs: options?.holdAfterTargetMs,
     derivePitch: (zoom) => zoom * 2,
     scheduleFrame: (callback) => {
       pending = callback
@@ -307,6 +309,48 @@ describe('cameraEngine', () => {
     advance(16)
     engine.driveExternal(camera([21.0005, 52]), { gesture: true })
     expect(engine.getCamera().centerCoordinate[0]).toBe(21.0005)
+  })
+
+  test('momentum after a throw does not derail a target set mid-fling', () => {
+    // Throw the map, then recenter while the fling is still decelerating. The
+    // fling keeps reporting camera changes with no finger down; taking them as
+    // a driver leaves the camera parked wherever the throw was heading.
+    const { engine, run, advance } = createTestEngine({ teleportDistanceM: 1_000_000 })
+    engine.reset(camera([21, 52]))
+    engine.setTarget({ center: [21.001, 52] })
+    run(3)
+    for (const longitude of [21.4, 21.7, 21.9]) {
+      advance(400) // past the echo window: these are not echoes
+      engine.driveExternal(camera([longitude, 52]))
+      run(2)
+    }
+    run(2000)
+    expect(engine.getCamera().centerCoordinate[0]).toBeCloseTo(21.001, 6)
+  })
+
+  test('a landed target is re-asserted over late fling writes', () => {
+    const { engine, frames, run, advance } = createTestEngine({ holdAfterTargetMs: 200 })
+    engine.reset(camera([21, 52]))
+    engine.snap({ center: [21.001, 52] })
+    run(4)
+    // Still holding: the loop stays open and keeps writing the target.
+    expect(engine.isAnimating()).toBe(true)
+    const framesAtTarget = frames.filter((f) => f.centerCoordinate[0] === 21.001).length
+    expect(framesAtTarget).toBeGreaterThan(1)
+    advance(300)
+    run(600)
+    expect(engine.isAnimating()).toBe(false)
+    expect(engine.getCamera().centerCoordinate[0]).toBe(21.001)
+  })
+
+  test('the hold releases the camera to a finger immediately', () => {
+    const { engine, run, advance } = createTestEngine({ holdAfterTargetMs: 1000 })
+    engine.reset(camera([21, 52]))
+    engine.setTarget({ center: [21.001, 52] })
+    run(600)
+    advance(16)
+    engine.driveExternal(camera([21.05, 52]), { gesture: true })
+    expect(engine.getCamera().centerCoordinate[0]).toBe(21.05)
   })
 
   test('ballistic transit dips zoom out and returns it on arrival', () => {
