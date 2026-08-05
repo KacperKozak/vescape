@@ -39,6 +39,14 @@ export interface CameraEngineTarget {
 export interface CameraEngineConfig {
   /** Called once per frame while any spring is in motion. */
   applyFrame: (camera: EngineCamera) => void
+  /**
+   * Cancel whatever the map is animating on its own — a fling, mostly. Called
+   * once when an app-issued target takes the camera, never per frame: the
+   * engine's own writes go through a non-transitioning setter that leaves
+   * native animators running, and a live fling overwrites every frame it
+   * writes.
+   */
+  cancelNativeMotion?: () => void
   /** Stiffness per axis, rad/s. */
   omega?: Partial<CameraEngineOmega>
   /** Pitch derived from the animated zoom each frame, unless a pitch target was set explicitly. */
@@ -357,6 +365,9 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
 
   /** Claim the camera for an app-issued target and arm the post-landing hold. */
   const claimTarget = () => {
+    // Only the first claim cancels: retargets during an animation the engine
+    // already owns have nothing native left to stop.
+    if (!targetOwned) config.cancelNativeMotion?.()
     targetOwned = true
     holdUntilMs = now() + holdAfterTargetMs
   }

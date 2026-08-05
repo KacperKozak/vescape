@@ -343,6 +343,40 @@ describe('cameraEngine', () => {
     expect(engine.getCamera().centerCoordinate[0]).toBe(21.001)
   })
 
+  test('claiming the camera cancels native motion once per claim', () => {
+    let cancels = 0
+    let pending: ((timestampMs: number) => void) | null = null
+    let now = 0
+    const engine = createCameraEngine({
+      applyFrame: () => {},
+      cancelNativeMotion: () => {
+        cancels++
+      },
+      scheduleFrame: (callback) => {
+        pending = callback
+        return 1
+      },
+      cancelFrame: () => {
+        pending = null
+      },
+      now: () => now,
+    })
+    engine.reset(camera([21, 52]))
+    engine.setTarget({ center: [21.001, 52] })
+    // Retargets inside the same claim have no native animation left to stop.
+    engine.setTarget({ center: [21.002, 52] })
+    expect(cancels).toBe(1)
+    for (let i = 0; i < 2000 && pending; i++) {
+      const callback: (timestampMs: number) => void = pending
+      pending = null
+      now += 16
+      callback(now)
+    }
+    // The camera is the map's again, so the next target cancels afresh.
+    engine.setTarget({ center: [21.003, 52] })
+    expect(cancels).toBe(2)
+  })
+
   test('the hold releases the camera to a finger immediately', () => {
     const { engine, run, advance } = createTestEngine({ holdAfterTargetMs: 1000 })
     engine.reset(camera([21, 52]))
