@@ -71,6 +71,11 @@ internal final class BoardSessionController: VescGattListener {
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `transport`
   private var replayTransport: ReplayTransport?
   private var transport: SessionTransport { replayTransport ?? gatt }
+  /// The clock this session stamps and compares its data against. Wall time for every real session;
+  /// a replay swaps in its own for the session's lifetime so a warmed-up playback writes a timeline
+  /// that agrees with itself. Never read directly — go through `nowMs()`.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `sessionClock`
+  private var sessionClock: SessionClock = SystemSessionClock.shared
   private let connectTimeoutSeconds = 20.0
   /// Board-ready watchdog: max time in `waitingForTelemetry` (GATT subscribed) before the board is
   /// presumed silent and we self-heal via reconnect. Mirrors Android `armBoardReadyTimeout`.
@@ -230,10 +235,14 @@ internal final class BoardSessionController: VescGattListener {
     // no such step — `gatt.connect` clears its own previous peripheral.
     if replay != nil { gatt.disconnect() }
     replayTransport = replay
+    // A replay owns the session's notion of time for its lifetime. Installed here, with the
+    // transport, so it cannot be undone by the teardown of the session being replaced.
+    sessionClock = replay?.clock ?? SystemSessionClock.shared
     gatt.recorder = { [weak self] in self?.recordingCoordinator.currentRecorder() }
     batteryEstimator.ensureLoaded()
     liveSeries.emit = { [weak self] name, body in self?.emit?(name, body) }
     liveSeries.generation = { [weak self] in self?.connectionSeq ?? 0 }
+    liveSeries.speed = { [weak self] in self?.sessionClock.speed ?? 1.0 }
     liveSeries.setWindowMinutes(config.liveHistoryLimitMinutes)
     beginSession(config: config, onSuccess: onSuccess, onError: onError)
     transport.connect(peripheralId: config.bleId)
@@ -244,9 +253,16 @@ internal final class BoardSessionController: VescGattListener {
   /// stack via `ReplayTransport`, keyed under a synthetic `replay:` board id so durable writes stay
   /// isolated from real boards. Stop = normal disconnect; the recording running out ends the
   /// session like a disconnect.
+  ///
+  /// `warmupMs` / `warmupSpeed` are opt-in and default to a plain 1× replay, so the Replay UI plays
+  /// a ride exactly as it happened. A caller that needs the live charts populated up front — the
+  /// screenshot run, an E2E flow — asks for a warmup window and how much faster than real time to
+  /// deliver it.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `startDebugReplay`
   func startReplay(
     recordingName: String,
+    warmupMs: Int64 = 0,
+    warmupSpeed: Double = 1.0,
     onSuccess: @escaping () -> Void,
     onError: @escaping (String, String) -> Void
   ) {
@@ -263,6 +279,12 @@ internal final class BoardSessionController: VescGattListener {
     let baseName = recordingName.hasSuffix(".jsonl") ? String(recordingName.dropLast(6)) : recordingName
     let replayBoardId = "replay:" + baseName
     let settings = appData.getSettings()
+    // The synthetic `replay:` board id has no board row and therefore no pack config, so the SoC
+    // estimate would stay nil for the whole playback and the battery bar would read nothing. The
+    // recording is a ride of a real board: borrow the selected board's pack to size it.
+    let replayBatteryConfig = (settings["selectedBoardId"] as? String)
+      .flatMap { appData.getBoard($0) }
+      .flatMap { AppDataRepository.normalizeBatteryConfig($0["batteryConfig"] ?? nil) }
     let config = BoardConnectConfig(
       appBoardId: replayBoardId,
       bleId: replayBoardId,
@@ -274,12 +296,18 @@ internal final class BoardSessionController: VescGattListener {
       refloatVersion: nil,
       refloatBaseVersion: nil,
       pollIntervalMs: (meta?["pollIntervalMs"] as? NSNumber)?.intValue ?? 0,
-      batteryConfig: nil,
+      batteryConfig: replayBatteryConfig,
       liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5
     )
     connect(
       config: config,
-      replay: ReplayTransport(recordingName: recordingName, listener: self),
+      replay: ReplayTransport(
+        recordingName: recordingName,
+        listener: self,
+        onLocation: { [weak self] fix in self?.onReplayLocation(fix) },
+        onHeading: { [weak self] heading in self?.onReplayHeading(heading) },
+        clock: ReplayClock(warmupMs: warmupMs, warmupSpeed: warmupSpeed)
+      ),
       onSuccess: onSuccess,
       onError: onError
     )
@@ -348,7 +376,12 @@ internal final class BoardSessionController: VescGattListener {
   func recordingPaused() -> Bool { idlePauseDetector.isPaused }
   func recordingActiveBoardId() -> String? { recordingCoordinator.activeBoardId }
 
+  /// The one place the phone's GPS is armed. A replay owns position for its whole session, so the
+  /// guard lives here rather than at the call sites: the map, the settings toggle and the session
+  /// start all ask for location updates independently, and a single live fix slipping through is
+  /// enough to make the marker jump off the recorded track.
   func startLocationUpdates() {
+    guard replayTransport == nil else { return }
     gpsError = gpsMonitor.start()
     onStateChanged?()
   }
@@ -535,7 +568,7 @@ internal final class BoardSessionController: VescGattListener {
     // failing store site (mirrors Android clearing `warningFailuresReported`). Keeps warning-path
     // failures non-fatal and reported without per-frame spam.
     BoardWarningFailureReporter.shared.beginSession()
-    gpsError = gpsMonitor.start()
+    if replayTransport == nil { gpsError = gpsMonitor.start() }
     // Fresh rule set for this session's alert engine — only the connected Board's enabled rules
     // (mirrors Android loadAlertRules on connect).
     let board = appData.getBoard(config.appBoardId)
@@ -606,6 +639,9 @@ internal final class BoardSessionController: VescGattListener {
     alertCoordinator.stopAllGeiger()
     transport.disconnect()
     replayTransport = nil
+    // The shifted clock belongs to the replay that installed it; anything running between here and
+    // the next session must not still be reading time from the past.
+    sessionClock = SystemSessionClock.shared
     reassembler.reset()
     connectedBoardId = nil
     bleId = nil
@@ -755,6 +791,9 @@ internal final class BoardSessionController: VescGattListener {
     alertCoordinator.stopAllGeiger()
     transport.disconnect()
     replayTransport = nil
+    // The shifted clock belongs to the replay that installed it; anything running between here and
+    // the next session must not still be reading time from the past.
+    sessionClock = SystemSessionClock.shared
     endLiveActivity()
     emit?("onError", ["message": message])
     setPhase(.error)
@@ -1218,6 +1257,10 @@ internal final class BoardSessionController: VescGattListener {
     // Cold path: full samples batched a few times a second for history + charts. Fired alerts ride
     // the buffered sample so `onTelemetryHistory` carries them too.
     historyBuffer.append(tick)
+    // Gated on session time, not wall time, so this needs no speed divisor of its own: a warming
+    // replay advances `lastPacketAt` fast, which fires the flush proportionally more often in real
+    // terms and keeps each batch the size it would be live.
+    // @platform-diff Android drives the same flush from a scheduler timer, so it scales explicitly.
     let now = telemetry.lastPacketAt
     if lastHistoryFlushAt == 0 || now - lastHistoryFlushAt >= historyFlushIntervalMs {
       flushHistory()
@@ -1396,6 +1439,43 @@ internal final class BoardSessionController: VescGattListener {
       telemetry: telemetry,
       location: latestPreciseLocation
     )
+  }
+
+  /// Feed a recorded fix into the same path a live one takes, so everything downstream — map,
+  /// trail, ride stats, Group Ride presence — sees the ride exactly as it happened.
+  ///
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `onReplayLocation`
+  private func onReplayLocation(_ fix: ReplayLocation) {
+    onLocationUpdated(
+      TelemetryLocationCapture(
+        latitude: fix.latitude,
+        longitude: fix.longitude,
+        speedMps: fix.speedMps,
+        bearingDeg: fix.bearingDeg,
+        accuracyM: fix.accuracyM,
+        altitudeM: fix.altitudeM,
+        timestamp: nowMs(),
+        precise: isPreciseGpsFix(accuracyM: fix.accuracyM)
+      )
+    )
+  }
+
+  /// Hand a recorded compass reading back to JS, which owns the magnetometer and therefore has to be
+  /// the one to feed it into the map. Emitted rather than applied natively for the same reason it was
+  /// recorded from JS: the sensor lives there.
+  ///
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `onReplayHeading`
+  private func onReplayHeading(_ heading: ReplayHeading) {
+    emit?("onReplayPhoneHeading", ["headingDeg": heading.headingDeg])
+  }
+
+  /// Offer a compass reading to whatever Debug Recording is running; dropped when nothing is
+  /// recording. JS pushes these unconditionally while the map's heading layer is live, and native is
+  /// the one that knows whether a recorder exists.
+  ///
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `recordPhoneHeading`
+  func recordPhoneHeading(_ headingDeg: Double) {
+    recordingCoordinator.currentRecorder()?.recordPhoneHeading(headingDeg)
   }
 
   private func onLocationUpdated(_ location: TelemetryLocationCapture) {
@@ -1627,7 +1707,8 @@ internal final class BoardSessionController: VescGattListener {
     lastPollAt > 0 ? Int(max(0, now - lastPollAt)) : nil
   }
 
-  private func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+  /// - SeeAlso: `SessionClock`
+  private func nowMs() -> Int64 { sessionClock.nowMs() }
   private func elapsedMs() -> Int64 { Int64(ProcessInfo.processInfo.systemUptime * 1000.0) }
 }
 

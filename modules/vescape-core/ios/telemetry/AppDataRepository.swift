@@ -39,14 +39,27 @@ final class AppDataRepository {
     Self.onDataChanged?(scope.rawValue)
   }
 
+  /// Degrading to `fallback` is deliberate — a database failure must not crash the bridge — but it
+  /// is indistinguishable from "no rows" at the call site. `getBoards` returning `[]` because
+  /// `boards` was missing a column read on screen exactly like a rider with no boards, so log it:
+  /// a swallowed error still gets to say what it was.
   private func read<T>(_ fallback: T, _ body: (Database) throws -> T) -> T {
     guard let pool else { return fallback }
-    return (try? pool.read(body)) ?? fallback
+    do {
+      return try pool.read(body)
+    } catch {
+      NSLog("[vescape] AppDataRepository read failed: \(error)")
+      return fallback
+    }
   }
 
   private func write(_ body: @escaping (Database) throws -> Void) {
     guard let pool else { return }
-    try? pool.write(body)
+    do {
+      try pool.write(body)
+    } catch {
+      NSLog("[vescape] AppDataRepository write failed: \(error)")
+    }
   }
 
   private func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }

@@ -328,6 +328,7 @@ function FullMapControls({
       <IconButton
         icon={ArrowLeftIcon}
         size="sm"
+        testID="map-exit"
         onPress={handleExitMapFocus}
         style={[styles.mapTopBackButton, { top }]}
       />

@@ -146,6 +146,7 @@ class VescapeCoreModule : Module() {
       "onBms",
       "onBmsSeries",
       "onLocation",
+      "onReplayPhoneHeading",
       "onTelemetryRebuildProgress",
       "onBoardProbeProgress",
       "onGroupRideConnection",
@@ -297,6 +298,9 @@ class VescapeCoreModule : Module() {
     Function("updateGroupRideIdentity") { riderId: String, riderName: String, riderColor: String? ->
       CoreForegroundService.updateGroupRideIdentity(context.applicationContext, riderId, riderName, riderColor)
     }
+    Function("recordPhoneHeading") { headingDeg: Double ->
+      CoreForegroundService.recordPhoneHeading(context.applicationContext, headingDeg)
+    }
     Function("setTelemetryRecordingEnabled") { enabled: Boolean -> setTelemetryRecordingEnabled(enabled) }
     Function("setBmsSeriesFocused") { focused: Boolean ->
       CoreForegroundService.setBmsSeriesFocused(focused)
@@ -424,10 +428,10 @@ class VescapeCoreModule : Module() {
         }
       }
     }
-    AsyncFunction("startDebugReplay") { name: String, promise: Promise ->
+    AsyncFunction("startDebugReplay") { name: String, options: Map<String, Any?>?, promise: Promise ->
       CoroutineScope(Dispatchers.IO).launch {
         try {
-          startDebugReplay(name, promise)
+          startDebugReplay(name, options, promise)
         } catch (e: Exception) {
           promise.reject("ERR_START_DEBUG_REPLAY", e.message, e)
         }
@@ -946,8 +950,13 @@ key == "wearAutoLaunchOnConnect" ||
    * Start a dev-mode replay session (ADR 0024): a Debug Recording played through the real session
    * stack via ReplayTransport, keyed under a synthetic `replay:` board id so durable writes stay
    * isolated from real boards. Stop = normal disconnect (`stopDebugReplay` / `stopBoard`).
+   *
+   * `warmupMs` / `warmupSpeed` are opt-in and default to a plain 1× replay, so the Replay UI plays a
+   * ride exactly as it happened. A caller that needs the live charts populated up front — the
+   * screenshot run, an E2E flow — asks for a warmup window and how much faster than real time to
+   * deliver it.
    */
-  private fun startDebugReplay(name: String, promise: Promise) {
+  private fun startDebugReplay(name: String, options: Map<String, Any?>?, promise: Promise) {
     val appCtx = context.applicationContext
     val meta = ReplayRecordings.readMeta(appCtx, name)
     val replayBoardId = "replay:" + name.removeSuffix(".jsonl")
@@ -961,6 +970,8 @@ key == "wearAutoLaunchOnConnect" ||
       telemetryRecordingEnabled = false,
       autoReconnect = false,
       replayRecordingName = name,
+      replayWarmupMs = (options?.get("warmupMs") as? Number)?.toLong() ?: 0L,
+      replayWarmupSpeed = (options?.get("warmupSpeed") as? Number)?.toDouble() ?: 1.0,
     )
     CoreForegroundService.startBoardSession(
       appCtx,
