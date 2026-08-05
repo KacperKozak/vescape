@@ -1,0 +1,93 @@
+# Smoke run on a hosted emulator.
+#
+# Dispatch-only for now. The run takes ~40 minutes and drives a live UI, so it is not a PR gate
+# until it has proven itself stable by hand a few times.
+name: Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      flow:
+        description: Single flow to run (e.g. 03-history). Empty runs all of them.
+        required: false
+        type: string
+
+jobs:
+  smoke:
+    name: Fixture-backed smoke run
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    # `fixtureBuildEnv` spreads the ambient environment into the build, so everything the app needs
+    # baked in is set once here and reaches both `expo prebuild` and Gradle. No keystore: without
+    # `VESCAPE_UPLOAD_STORE_FILE` the release variant falls back to debug signing
+    # (`plugins/withAndroidSigningConfig.ts`), which is all an emulator run needs.
+    env:
+      EXPO_PUBLIC_SERVER_URL: https://api.vescape.app
+      EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN: ${{ secrets.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN }}
+      EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY }}
+      EXPO_PUBLIC_MAPY_API_KEY: ${{ secrets.EXPO_PUBLIC_MAPY_API_KEY }}
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Install Maestro
+        run: |
+          curl -Ls https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      # The emulator is unusably slow without nested virtualisation, and the runner does not grant
+      # access to /dev/kvm by default.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # `scripts/smoke.ts` owns everything device-side — the Release build, install, fixture push,
+      # permission grants, location pin, flow order. The workflow only supplies a booted emulator,
+      # so the CI run and a local one cannot drift apart.
+      - name: Run smoke flows
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          # No GPU on a hosted runner. Mapbox has to render through software GL, which is the part
+          # of this run least likely to survive the move off a real device.
+          emulator-options: >-
+            -no-window -no-snapshot -no-boot-anim -gpu swiftshader_indirect
+            -noaudio -camera-back none
+          disable-animations: false
+          script: bun run smoke --device emulator-5554 ${{ inputs.flow && format('--flow {0}', inputs.flow) || '' }}
+
+      # Maestro writes a screenshot and a view hierarchy dump per failed step, which is the only way
+      # to tell a real regression from a slow-runner race without reproducing it locally.
+      - name: Upload Maestro debug output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-debug
+          path: ~/.maestro/tests/
+          if-no-files-found: warn
