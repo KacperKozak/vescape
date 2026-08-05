@@ -8,12 +8,14 @@ import {
   createPromotionDispatchPayload,
   createProductionDispatchPayload,
   dispatchInternalBuild,
+  dispatchIosInternalBuild,
   dispatchOpenPromotion,
   dispatchProduction,
   downloadManifest,
   downloadPromotionManifest,
   downloadProductionManifest,
   failedWorkflowJobs,
+  findDispatchedIosRun,
   findDispatchedRun,
   findPromotionRun,
   findProductionRun,
@@ -117,6 +119,7 @@ function App({ finish, initialPhase = 'dashboard', initialSourceRef }: AppProps)
   const [bumpIndex, setBumpIndex] = useState(1)
   const [rolloutInput, setRolloutInput] = useState('10')
   const [run, setRun] = useState<{ id: number; url: string } | null>(null)
+  const [iosRun, setIosRun] = useState<{ id: number; url: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retryRunId, setRetryRunId] = useState<number | null>(null)
 
@@ -401,23 +404,28 @@ function App({ finish, initialPhase = 'dashboard', initialSourceRef }: AppProps)
 
   const dispatch = async (confirmedPlan: Plan) => {
     goto('dispatching')
-    setStatus(`Dispatching trusted workflow from ${confirmedPlan.workflowRef}…`)
+    setStatus(`Dispatching trusted Android and iOS workflows from ${confirmedPlan.workflowRef}…`)
     try {
-      await dispatchInternalBuild(
-        confirmedPlan.repo,
-        createDispatchPayload(
-          confirmedPlan.sourceSha,
-          confirmedPlan.requestId,
-          confirmedPlan.workflowRef,
-        ),
+      const payload = createDispatchPayload(
+        confirmedPlan.sourceSha,
+        confirmedPlan.requestId,
+        confirmedPlan.workflowRef,
       )
+      setIosRun(null)
+      await dispatchInternalBuild(confirmedPlan.repo, payload)
+      await dispatchIosInternalBuild(confirmedPlan.repo, payload)
       goto('waiting')
-      setStatus('Waiting for structured workflow run…')
+      setStatus('Waiting for structured workflow runs…')
       let workflowRun = null
-      for (let attempt = 0; attempt < 30 && !workflowRun; attempt += 1) {
-        workflowRun = await findDispatchedRun(confirmedPlan.repo, confirmedPlan.requestId)
-        if (!workflowRun) await sleep(2_000)
+      let iosWorkflowRun = null
+      for (let attempt = 0; attempt < 30 && !(workflowRun && iosWorkflowRun); attempt += 1) {
+        if (!workflowRun)
+          workflowRun = await findDispatchedRun(confirmedPlan.repo, confirmedPlan.requestId)
+        if (!iosWorkflowRun)
+          iosWorkflowRun = await findDispatchedIosRun(confirmedPlan.repo, confirmedPlan.requestId)
+        if (!(workflowRun && iosWorkflowRun)) await sleep(2_000)
       }
+      if (iosWorkflowRun) setIosRun({ id: iosWorkflowRun.id, url: iosWorkflowRun.html_url })
       if (!workflowRun) throw new Error('Dispatch succeeded, but its workflow run was not found')
       await watchInternalRun(confirmedPlan.repo, workflowRun)
     } catch (caught) {
@@ -686,7 +694,7 @@ function App({ finish, initialPhase = 'dashboard', initialSourceRef }: AppProps)
             },
             {
               label: 'Next steps',
-              value: 'notes → commit dev → merge into main → push → Internal build',
+              value: 'notes → commit dev → merge into main → push → Android + iOS internal build',
             },
           ]}
           note="No Play upload, tag, GitHub Release, or production mutation happens yet."
@@ -766,12 +774,15 @@ function App({ finish, initialPhase = 'dashboard', initialSourceRef }: AppProps)
           fields={[
             { label: 'Repository', value: plan.repo },
             {
-              label: 'Workflow',
-              value: `${plan.workflowRef}:.github/workflows/release-android.yml`,
+              label: 'Workflows',
+              value: `${plan.workflowRef}:.github/workflows/release-android.yml + release-ios.yml`,
             },
             { label: 'Source SHA', value: plan.sourceSha },
             { label: 'Marketing version', value: plan.marketingVersion },
-            { label: 'Destination', value: 'phone internal + Wear internal only' },
+            {
+              label: 'Destination',
+              value: 'phone internal + Wear internal + TestFlight internal only',
+            },
           ]}
           confirmLabel="Create workflow run"
           index={index}
@@ -845,6 +856,11 @@ function App({ finish, initialPhase = 'dashboard', initialSourceRef }: AppProps)
       {run && phase !== 'dashboard' && (
         <Text>
           Run: {run.id} · {run.url}
+        </Text>
+      )}
+      {iosRun && phase !== 'dashboard' && (
+        <Text>
+          iOS run: {iosRun.id} · {iosRun.url}
         </Text>
       )}
       {phase === 'complete' && (
