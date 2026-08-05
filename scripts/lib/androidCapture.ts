@@ -208,8 +208,23 @@ export async function createAndroidDriver(
       // self-contained APK out of it — no Metro server to start and no dev-client launcher screen
       // to tap through before the first flow step.
       // `--device` takes Expo's device name, not the adb serial.
+      //
+      // `--no-bundler` is what makes this command *return*. Without it Expo installs the APK, opens
+      // the dev-client URL and then stays attached streaming logs — on a terminal that reads as a
+      // build that finished, but on CI the step simply hangs until the job times out. A release
+      // build embeds its bundle, so there is nothing for a bundler to serve either way (the repo's
+      // own `android:release` script passes it for the same reason).
       await runOrDie(
-        ['bunx', 'expo', 'run:android', '--variant', 'release', '--device', device.name],
+        [
+          'bunx',
+          'expo',
+          'run:android',
+          '--variant',
+          'release',
+          '--no-bundler',
+          '--device',
+          device.name,
+        ],
         fixtureBuildEnv(mode, replay),
       )
     },
