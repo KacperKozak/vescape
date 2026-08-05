@@ -14,15 +14,16 @@ import {
   CAPTURE_LOCATION,
   FIXTURE_ZIP,
   runOrDie,
-  screenshotBuildEnv,
+  fixtureBuildEnv,
   warnMissingFixture,
   type CaptureDriver,
+  type FixtureRunMode,
 } from './captureDriver.ts'
 import { select, type SelectOption } from './select.ts'
 
 const OUT_DIR = 'screenshots/android'
 
-/** Mirrors `screenshotFixtureDir` in `src/config/screenshotMode.ts`. */
+/** Mirrors `fixtureDir` in `src/config/fixtureSession.ts`. */
 const DEVICE_FIXTURE_DIR = `/storage/emulated/0/Android/data/${applicationId}/files`
 
 /** Play's phone screenshots are cut to this; anything else has to be rescaled by hand. */
@@ -159,7 +160,7 @@ async function chooseDevice(attached: Device[]): Promise<DeviceChoice> {
   return select('Android capture device', options)
 }
 
-async function resolveDevice(requested: string | null): Promise<Device> {
+async function resolveDevice(requested: string | null, mode: FixtureRunMode): Promise<Device> {
   const attached = await attachedDevices()
 
   if (requested) {
@@ -173,7 +174,8 @@ async function resolveDevice(requested: string | null): Promise<Device> {
 
   const choice = await chooseDevice(attached)
   const device = choice.kind === 'avd' ? await bootAvd(choice.name) : choice.device
-  await warnOnResolution(device.serial)
+  // Only the store set has to come off one screen size; a smoke run asserts on text, not pixels.
+  if (mode === 'screenshots') await warnOnResolution(device.serial)
   return device
 }
 
@@ -188,8 +190,9 @@ async function warnOnResolution(device: string): Promise<void> {
 export async function createAndroidDriver(
   requestedDevice: string | null,
   replay: string,
+  mode: FixtureRunMode = 'screenshots',
 ): Promise<CaptureDriver> {
-  const device = await resolveDevice(requestedDevice)
+  const device = await resolveDevice(requestedDevice, mode)
   const adb = (...rest: string[]) => capture(['adb', '-s', device.serial, ...rest])
 
   return {
@@ -199,12 +202,15 @@ export async function createAndroidDriver(
     deviceLabel: `${device.name} (${device.serial})`,
 
     async buildAndInstall() {
-      console.log('› Building the Android screenshot Release build…')
+      console.log(`› Building the Android ${mode} Release build…`)
       await runOrDie(['bun', 'run', 'native:sync', 'android'])
+      // Release on both modes. The store set has to be the shipped build, and a smoke run gets a
+      // self-contained APK out of it — no Metro server to start and no dev-client launcher screen
+      // to tap through before the first flow step.
       // `--device` takes Expo's device name, not the adb serial.
       await runOrDie(
         ['bunx', 'expo', 'run:android', '--variant', 'release', '--device', device.name],
-        screenshotBuildEnv(replay),
+        fixtureBuildEnv(mode, replay),
       )
     },
 
@@ -250,6 +256,22 @@ export async function createAndroidDriver(
       }
     },
 
+    async requireAwakeDisplay() {
+      // KEYCODE_WAKEUP, then ask the window manager to drop the keyguard. A swipe-only lock goes
+      // away here; a PIN, pattern or biometric one cannot be dismissed from adb, and should not be.
+      await adb('shell', 'input', 'keyevent', 'KEYCODE_WAKEUP')
+      await adb('shell', 'wm', 'dismiss-keyguard')
+
+      const window = await adb('shell', 'dumpsys', 'window')
+      if (!/mDreamingLockscreen=true/.test(window)) return
+
+      console.error(
+        `${device.name} is locked and its keyguard is secured, so the flows would drive a lock ` +
+          'screen. Unlock the device and run again with --no-build.',
+      )
+      process.exit(1)
+    },
+
     async pinLocation() {
       // `geo fix` is an emulator console command; a physical device would need a mock provider app,
       // which is well past what a screenshot run should install.
@@ -262,6 +284,10 @@ export async function createAndroidDriver(
     },
 
     async setChrome(clean: boolean) {
+      // Demo mode exists so panels do not disagree on clock or battery. A smoke run photographs
+      // nothing, so it leaves the device's own status bar alone.
+      if (mode === 'smoke') return
+
       // Animation scales are deliberately left alone. Turning them off device-wide makes a frame
       // deterministic by abolishing the thing being photographed, and it outlives the run: a failed
       // flow used to leave every app on the device without animations, with nothing on screen to say
