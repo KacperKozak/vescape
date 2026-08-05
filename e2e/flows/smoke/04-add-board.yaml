@@ -71,7 +71,15 @@ appId: ${APP_ID}
     id: add-board-name-input
 - eraseText
 - inputText: Smoke Board
-- hideKeyboard
+# Tapping the step's own title blurs the input, which is what dismisses the keyboard. `hideKeyboard`
+# cannot be used here: on Android Maestro implements it as a back press, so on the runs where the
+# keyboard is already down it pops the wizard modal instead and the flow lands back on the main
+# screen with nothing to say why. Blurring is the same intent without the second meaning.
+- tapOn: Name your board
+- scrollUntilVisible:
+    element:
+      id: add-board-name-next
+    direction: DOWN
 - tapOn:
     id: add-board-name-next
 
