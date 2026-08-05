@@ -565,7 +565,11 @@ function App({ finish, initialPhase = 'dashboard', initialSourceRef }: AppProps)
       if (key.return) void prepare()
       else if (key.escape) loadDashboard()
       else if (key.backspace || key.delete) setSourceRef((value) => value.slice(0, -1))
-      else if (input && !key.ctrl && !key.meta) setSourceRef((value) => value + input)
+      else if (input && !key.ctrl && !key.meta) {
+        // Buffered stdin can deliver control characters (bare LF does not set key.return)
+        const typed = input.replace(/[^\w./-]/g, '')
+        if (typed) setSourceRef((value) => value + typed)
+      }
       return
     }
     if (phase === 'candidate') {

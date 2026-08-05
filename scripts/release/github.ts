@@ -220,7 +220,8 @@ export async function repositoryDefaultBranch(repo: string): Promise<string> {
   return value
 }
 
-export async function resolveSourceSha(ref: string): Promise<string> {
+export async function resolveSourceSha(input: string): Promise<string> {
+  const ref = input.trim()
   const process = Bun.spawn(['git', 'rev-parse', '--verify', `${ref}^{commit}`], {
     stdout: 'pipe',
     stderr: 'pipe',
