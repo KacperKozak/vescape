@@ -60,5 +60,13 @@ appId: ${APP_ID}
     notVisible:
       id: history-session-sheet
     timeout: 15000
+# And then wait for the header to come back before handing over. Every branch in `_home.yaml` is an
+# instantaneous `when: visible:` probe — nothing there waits — so a `history-back` that is one frame
+# from mounting reads as absent, every branch skips, and the run dies on `battery-bar` with History
+# still on screen. The caller owes the helper a settled screen.
+- extendedWaitUntil:
+    visible:
+      id: history-back
+    timeout: 15000
 
 - runFlow: ../fixture/_home.yaml
