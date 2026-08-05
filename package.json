@@ -1,6 +1,6 @@
 {
   "name": "vescape",
-  "version": "0.84.3",
+  "version": "0.85.0",
   "private": true,
   "license": "GPL-3.0-or-later",
   "author": "Kacper Kozak",
@@ -14,6 +14,7 @@
     "prebuild": "expo prebuild",
     "native:sync": "bun run scripts/native-sync.ts",
     "android": "bun run native:sync android && bun run relay:reverse && expo run:android --device",
+    "android:release": "bun run native:sync android && bun run relay:reverse && expo run:android --device --variant release --no-bundler",
     "android:e2e": "EXPO_PUBLIC_E2E=1 bun run android",
     "ios": "bun run native:sync ios && expo run:ios --device",
     "wear:build": "bun run scripts/wear.ts build",

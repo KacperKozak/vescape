@@ -104,8 +104,8 @@ export function TelemetryOverlay({
   }, [mapRef])
 
   const handleRevealPan = useCallback(
-    (totalX: number, totalY: number, animationDuration?: number, progress?: number) => {
-      mapRef.current?.previewPanBy(totalX, totalY, animationDuration, progress)
+    (totalX: number, totalY: number, progress: number) => {
+      mapRef.current?.previewPanBy(totalX, totalY, progress)
     },
     [mapRef],
   )

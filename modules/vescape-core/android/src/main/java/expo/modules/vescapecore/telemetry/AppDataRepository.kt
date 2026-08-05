@@ -242,7 +242,7 @@ class AppDataRepository private constructor(private val context: Context) {
     val settings = AppSettings(
       liveHistoryLimit = req("liveHistoryLimit", 5, ::validLiveHistoryLimitMinutes),
       autoConnect = req("autoConnect", true) { it as? Boolean },
-      autoRecording = req("autoRecording", false) { it as? Boolean },
+      autoRecording = req("autoRecording", true) { it as? Boolean },
       selectedBoardId = opt("selectedBoardId") { it as? String },
       lastGpsLatitude = opt("lastGpsLatitude") { (it as? Number)?.toDouble() },
       lastGpsLongitude = opt("lastGpsLongitude") { (it as? Number)?.toDouble() },

@@ -501,7 +501,7 @@ final class AppDataRepository {
   static let defaultSettings: [String: Any] = [
     "liveHistoryLimit": 5,
     "autoConnect": true,
-    "autoRecording": false,
+    "autoRecording": true,
     "companionPresenceEnabled": false,
     "boardWarningsEnabled": true,
     "companionPresenceCooldownMinutes": 60,

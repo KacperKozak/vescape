@@ -14,6 +14,13 @@ bun run android   # native:sync android && expo run:android --device
 bun run native:sync ios   # sync only, no app run
 ```
 
+`bun run android:release` is the same Android flow at `--variant release`: the JS is Hermes-compiled
+and bundled into the APK instead of served by Metro, so the app runs at production speed. It still
+reads `.env.local`, so the application id keeps the `.dev` suffix and the server URL stays whatever
+local dev points at — it installs straight over the debug build (both sign with the debug keystore
+locally; only Fastlane supplies the upload keystore). Use it whenever a debug build is too slow to
+judge, camera and map motion especially. Rebuilding is the only way to pick up a JS change.
+
 Output always names the reason before it does anything (`+` added, `-` removed, `~` changed):
 
 ```text

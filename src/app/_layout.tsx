@@ -102,6 +102,10 @@ function RootLayout() {
     'Raleway-700': require('../../assets/fonts/Raleway-700.ttf'),
     'Raleway-800': require('../../assets/fonts/Raleway-800.ttf'),
     'Raleway-900': require('../../assets/fonts/Raleway-900.ttf'),
+    'JetBrainsMono-500': require('../../assets/fonts/JetBrainsMono-500.ttf'),
+    'JetBrainsMono-600': require('../../assets/fonts/JetBrainsMono-600.ttf'),
+    'JetBrainsMono-700': require('../../assets/fonts/JetBrainsMono-700.ttf'),
+    'JetBrainsMono-800': require('../../assets/fonts/JetBrainsMono-800.ttf'),
   })
 
   useEffect(() => {
@@ -207,6 +211,10 @@ function RootLayout() {
             <Stack.Screen
               name={stackScreens.settingsReleaseNotes}
               options={{ title: 'Release notes' }}
+            />
+            <Stack.Screen
+              name={stackScreens.devMapPlayground}
+              options={{ title: 'Camera playground' }}
             />
             <Stack.Screen name={stackScreens.controlBatteryRaw} options={{ title: 'Raw BMS' }} />
             <Stack.Screen name={stackScreens.tune} options={{ title: 'Tune' }} />
