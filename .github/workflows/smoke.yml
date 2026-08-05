@@ -32,6 +32,10 @@ jobs:
       EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY }}
       EXPO_PUBLIC_MAPY_API_KEY: ${{ secrets.EXPO_PUBLIC_MAPY_API_KEY }}
       EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      # The release variant runs Sentry's sourcemap upload task, which fails without an org. This
+      # build is thrown away with the emulator, so it has no release to publish — the fix is to skip
+      # the upload rather than to hand CI a Sentry token for an artifact nobody will ever symbolicate.
+      SENTRY_DISABLE_AUTO_UPLOAD: 'true'
 
     steps:
       - uses: actions/checkout@v4
