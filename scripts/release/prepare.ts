@@ -105,7 +105,7 @@ interface TrainNotesDependencies {
   author(train: string): Promise<void>
   edit(path: string): Promise<void>
   reprompt(path: string, commits: string): Promise<void>
-  commits(path: string): Promise<string>
+  commits(baseVersion: string, notesPath: string): Promise<CommitRange>
   validate(source: string, label: string): void
   build(): Promise<void>
   log(message: string): void
@@ -114,6 +114,7 @@ interface TrainNotesDependencies {
 export async function prepareTrainNotes(
   bump: VersionBump,
   marketingVersion: string,
+  baseVersion: string,
   dependencies: TrainNotesDependencies = trainNotesDependencies(),
 ): Promise<string> {
   const notesPath = releaseTrainNotesPath(marketingVersion)
@@ -140,29 +141,43 @@ export async function prepareTrainNotes(
     return notesPath
   }
 
-  const commits = await dependencies.commits(notesPath)
-  dependencies.log(`\nCommits since ${notesPath} was last modified:`)
-  dependencies.log(commits || '  (none)')
+  const { since, log } = await dependencies.commits(baseVersion, notesPath)
+  dependencies.log(`\nCommits since ${since}:`)
+  dependencies.log(log || '  (none)')
   const choice = await dependencies.select(['keep', 'edit', 'reprompt'])
   if (choice === 'edit') await dependencies.edit(notes)
-  if (choice === 'reprompt') await dependencies.reprompt(notes, commits)
+  if (choice === 'reprompt') await dependencies.reprompt(notes, log)
   dependencies.validate(await dependencies.read(notes), notesPath)
   await dependencies.build()
   return notesPath
 }
 
-async function commitsSinceTrainNotes(notesPath: string): Promise<string> {
-  const lastModified = await checked(
-    'git',
-    ['log', '-1', '--format=%H', '--', notesPath],
-    `Cannot find history for ${notesPath}`,
-  )
-  if (!lastModified) return ''
-  return checked(
-    'git',
-    ['log', '--oneline', `${lastModified}..HEAD`],
-    `Cannot list commits since ${notesPath} changed`,
-  )
+export interface CommitRange {
+  since: string
+  log: string
+}
+
+async function commitsSinceRelease(baseVersion: string, notesPath: string): Promise<CommitRange> {
+  const tag = `v${baseVersion}`
+  const tagged = await command('git', ['rev-parse', '--verify', '--quiet', `${tag}^{commit}`])
+  const since = tagged.exitCode === 0 ? tag : notesPath
+  const boundary =
+    tagged.exitCode === 0
+      ? tagged.stdout
+      : await checked(
+          'git',
+          ['log', '-1', '--first-parent', '--format=%H', '--', notesPath],
+          `Cannot find history for ${notesPath}`,
+        )
+  if (!boundary) return { since, log: '' }
+  return {
+    since,
+    log: await checked(
+      'git',
+      ['log', '--oneline', '--first-parent', `${boundary}..HEAD`],
+      `Cannot list commits since ${since}`,
+    ),
+  }
 }
 
 function trainNotesDependencies(): TrainNotesDependencies {
@@ -214,7 +229,7 @@ function trainNotesDependencies(): TrainNotesDependencies {
         ].join('\n'),
       })
     },
-    commits: commitsSinceTrainNotes,
+    commits: commitsSinceRelease,
     validate: validateReleaseMarkdown,
     build: buildReleaseNotes,
     log: console.log,
@@ -285,7 +300,7 @@ export async function prepareReleaseCandidate(
     await writeFile(PACKAGE_PATH, `${JSON.stringify(pkg, null, 2)}\n`)
   }
 
-  const notesPath = await prepareTrainNotes(bump, marketingVersion)
+  const notesPath = await prepareTrainNotes(bump, marketingVersion, baseVersion)
 
   const status = await checked('git', ['status', '--porcelain'], 'Cannot inspect release changes')
   const changedPaths = parsePorcelainPaths(status)

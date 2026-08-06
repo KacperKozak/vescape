@@ -99,7 +99,10 @@ describe('release-train authoring flow', () => {
       reprompt: async (_path: string, commits: string) => {
         calls.push(`reprompt:${commits}`)
       },
-      commits: async () => 'abc1234 Add rider feature',
+      commits: async (baseVersion: string) => ({
+        since: `v${baseVersion}`,
+        log: 'abc1234 Add rider feature',
+      }),
       validate: () => calls.push('validate'),
       build: async () => {
         calls.push('build')
@@ -111,25 +114,25 @@ describe('release-train authoring flow', () => {
 
   test('minor bump can skip creating a train file', async () => {
     const { calls, deps } = dependencies({ exists: false, choice: 'skip' })
-    expect(await prepareTrainNotes('minor', '0.85.0', deps)).toBe('release-notes/0.85.md')
+    expect(await prepareTrainNotes('minor', '0.85.0', '0.84.3', deps)).toBe('release-notes/0.85.md')
     expect(calls).toEqual([])
   })
 
   test('minor bump can author and validate a new train file with Codex', async () => {
     const { calls, deps } = dependencies({ exists: false, choice: 'draft' })
-    await prepareTrainNotes('minor', '0.85.0', deps)
+    await prepareTrainNotes('minor', '0.85.0', '0.84.3', deps)
     expect(calls).toEqual(['author', 'validate', 'build'])
   })
 
   test('patch bump keeps valid train notes without changing them', async () => {
     const { calls, deps } = dependencies({ exists: true, choice: 'keep' })
-    await prepareTrainNotes('patch', '0.84.1', deps)
+    await prepareTrainNotes('patch', '0.84.1', '0.84.0', deps)
     expect(calls).toEqual(['validate', 'build'])
   })
 
   test('patch bump re-prompts Codex with commits since the train file changed', async () => {
     const { calls, deps } = dependencies({ exists: true, choice: 'reprompt' })
-    await prepareTrainNotes('patch', '0.84.1', deps)
+    await prepareTrainNotes('patch', '0.84.1', '0.84.0', deps)
     expect(calls).toEqual(['reprompt:abc1234 Add rider feature', 'validate', 'build'])
   })
 })
