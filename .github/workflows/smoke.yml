@@ -19,7 +19,10 @@ on:
 jobs:
   smoke:
     name: Fixture-backed smoke run
-    runs-on: ubuntu-latest
+    # Blacksmith x64 Linux runner: nested virtualisation is supported, so the emulator gets KVM.
+    # 8 vCPU / 32 GB is sized for the release Gradle build (the long pole) sharing the box with an
+    # emulator that wants ~4 GB to itself; the 160 GB disk also fits the SDK + NDK + Gradle caches.
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 90
 
     # `fixtureBuildEnv` spreads the ambient environment into the build, so everything the app needs
@@ -64,7 +67,8 @@ jobs:
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       # The emulator is unusably slow without nested virtualisation, and the runner does not grant
-      # access to /dev/kvm by default.
+      # access to /dev/kvm by default. Kept while the Blacksmith move is unproven — drop it once a
+      # run shows /dev/kvm is already world-writable there.
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
