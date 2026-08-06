@@ -25,7 +25,6 @@ import {
   listInternalWorkflowRuns,
   listProductionCandidates,
   marketingVersion,
-  releaseTrainFreezeWarning,
   type ReleaseTrackConfig,
   type ProductionCandidate,
   releaseTrackConfig,
@@ -237,8 +236,7 @@ function App({ finish, initialPhase = 'dashboard', initialSourceRef }: AppProps)
       candidate.manifest.marketingVersion,
       candidate.manifest.sourceSha,
     )
-    const freezeWarning = await releaseTrainFreezeWarning(candidate.manifest.marketingVersion)
-    const next = { ...basePlan, candidate, notesPath, freezeWarning }
+    const next = { ...basePlan, candidate, notesPath }
     setProductionPlan(next)
     setStatus('')
     if (next.operation === 'promote' || next.operation === 'advance') {
@@ -274,7 +272,6 @@ function App({ finish, initialPhase = 'dashboard', initialSourceRef }: AppProps)
         tracks,
         operation,
         rolloutPercentage: 10,
-        freezeWarning: null,
       }
       if (operation === 'promote') {
         setProductionCandidates(available)
@@ -801,7 +798,6 @@ function App({ finish, initialPhase = 'dashboard', initialSourceRef }: AppProps)
         <Confirm
           title={`Production ${productionPlan.operation}`}
           fields={productionFields(productionPlan)}
-          warning={productionPlan.freezeWarning}
           note="Trusted workflow revalidates source ancestry, canonical notes, and both live Play tracks."
           confirmLabel="Run explicitly approved production operation"
           index={index}

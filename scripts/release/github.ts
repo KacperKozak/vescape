@@ -10,7 +10,7 @@ import type {
   WorkflowRun,
 } from './contracts'
 import { parseProductionManifest, parsePromotionManifest, parseReleaseManifest } from './contracts'
-import { releaseTrainNotesPath } from './prepare'
+import { releaseNotesPath } from './prepare'
 
 const WORKFLOW_FILE = 'release-android.yml'
 const IOS_WORKFLOW_FILE = 'release-ios.yml'
@@ -775,12 +775,11 @@ export async function canonicalNotesPath(
   marketingVersion: string,
   ref = 'main',
 ): Promise<string> {
-  const path = releaseTrainNotesPath(marketingVersion)
-  const train = path.slice('release-notes/'.length, -'.md'.length)
+  const path = releaseNotesPath(marketingVersion)
   await checkedGh(
     [
       'api',
-      `repos/${repo}/contents/release-notes/${encodeURIComponent(train)}.md?ref=${encodeURIComponent(ref)}`,
+      `repos/${repo}/contents/release-notes/${encodeURIComponent(marketingVersion)}.md?ref=${encodeURIComponent(ref)}`,
       '--silent',
     ],
     `Canonical release notes missing at ${path} on ${ref}`,
@@ -815,44 +814,6 @@ export async function listPrereleaseTags(repo: string, limit = 20): Promise<stri
   return parseReleases(JSON.parse(output))
     .filter((release) => release.isPrerelease)
     .map((release) => release.tagName)
-}
-
-export function trainFreezeWarning(
-  notesPath: string,
-  firstProductionTag: string,
-  firstProductionAt: number,
-  notesModifiedAt: number,
-): string | null {
-  if (notesModifiedAt <= firstProductionAt) return null
-  return `${notesPath} changed after ${firstProductionTag} reached production; train is frozen. Put late release notes in next train.`
-}
-
-export async function releaseTrainFreezeWarning(marketingVersion: string): Promise<string | null> {
-  const notesPath = releaseTrainNotesPath(marketingVersion)
-  const train = notesPath.slice('release-notes/'.length, -'.md'.length)
-  await checkedGit(['fetch', 'origin', 'main', '--tags'], 'Cannot refresh release train history')
-  const tags = await checkedGit(
-    [
-      'for-each-ref',
-      '--sort=creatordate',
-      '--format=%(refname:short) %(creatordate:unix)',
-      `refs/tags/v${train}.*`,
-    ],
-    `Cannot inspect production tags for train ${train}`,
-  )
-  const first = tags.split('\n').find((line) => line.length > 0)
-  if (!first) return null
-  const match = /^(v\S+) (\d+)$/.exec(first)
-  if (!match) throw new Error(`Invalid production tag metadata "${first}"`)
-  const notesModifiedAt = Number(
-    await checkedGit(
-      ['log', '-1', '--format=%ct', 'origin/main', '--', notesPath],
-      `Cannot inspect history for ${notesPath}`,
-    ),
-  )
-  if (!Number.isSafeInteger(notesModifiedAt) || notesModifiedAt < 1)
-    throw new Error(`Cannot find history for ${notesPath}`)
-  return trainFreezeWarning(notesPath, match[1], Number(match[2]), notesModifiedAt)
 }
 
 export async function downloadPromotionManifest(runId: number): Promise<PromotionManifest> {

@@ -49,19 +49,17 @@ export interface ConfirmField {
 
 /**
  * Single confirm presentation for every mutating flow: title, the exact facts the workflow will
- * act on, optional warning, then a two-item menu defaulting to Cancel.
+ * act on, then a two-item menu defaulting to Cancel.
  */
 export function Confirm({
   title,
   fields,
-  warning,
   note,
   confirmLabel,
   index,
 }: {
   title: string
   fields: readonly ConfirmField[]
-  warning?: string | null
   note?: string
   confirmLabel: string
   index: number
@@ -76,7 +74,6 @@ export function Confirm({
           </Field>
         ))}
       </Box>
-      {warning ? <Text color="yellow">Warning: {warning}</Text> : null}
       {note ? <Hint>{note}</Hint> : null}
       <Box flexDirection="column" marginTop={1}>
         <Menu
