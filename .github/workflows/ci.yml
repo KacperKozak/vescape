@@ -22,5 +22,11 @@ jobs:
       - run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
       - run: bun install
       - run: bun run copy:shared
+      - name: Environment diagnostic
+        run: |
+          echo "node: $(node -v) @ $(which node)"
+          echo "bun:  $(bun -v)"
+          node -p "'typescript: ' + require('typescript').version" || echo "typescript: NOT RESOLVABLE"
+          node -p "'stripTypeScriptTypes: ' + (typeof require('node:module').stripTypeScriptTypes)"
       - run: bun x expo prebuild --platform android --no-install
       - run: bun run check:ci
