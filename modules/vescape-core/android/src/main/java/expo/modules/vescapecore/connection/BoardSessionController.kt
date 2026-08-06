@@ -225,8 +225,8 @@ internal class BoardSessionController(private val service: CoreForegroundService
                     connectionSeq = currentSessionId,
                     connectAttempt = connectionCoordinator.connectAttempt,
                     autoReconnectAttempt = reconnectScheduler.currentAttempt,
-                    canId = canId,
-                    directConnection = directConnection,
+                    canId = currentCanId,
+                    directConnection = currentBoardTransport() == BoardTransport.Direct,
                     lastSentCommand = lastSentCommand,
                     lastReceivedCommandByte = lastReceivedCommandByte,
                     lastTelemetryAt = telemetryPipeline.lastTelemetryAt,
@@ -312,8 +312,7 @@ internal class BoardSessionController(private val service: CoreForegroundService
                     ConfigConnectionSnapshot(
                         boardConfig,
                         boardStatus,
-                        canId,
-                        directConnection,
+                        currentBoardTransport(),
                         fwVersionString,
                         boardSession?.linkIntegrity ?: LinkIntegrity.Unknown,
                     )
@@ -435,7 +434,6 @@ internal class BoardSessionController(private val service: CoreForegroundService
             transport.clear(markIntentional = false)
             bmsSeriesRing.clear()
             telemetryPipeline.clearLiveTelemetry()
-            directConnection = false
             boardError = reason
             transitionBoardPhase(
                 next = BoardPhase.Reconnecting,
@@ -581,8 +579,6 @@ internal class BoardSessionController(private val service: CoreForegroundService
     // Latest cold-path values the watch tick reads alongside [telemetry]; reset when telemetry clears.
     private var latestBatterySoc: Double? = null
     private var latestDutyExcluded = false
-    private var canId: Int? = null
-    private var directConnection = false
     private var fwVersionString: String? = null
     private var boardReadyTimeoutHandle: Cancellable? = null
     private var gpsError: String? = null
@@ -936,20 +932,6 @@ private var wearAutoLaunchOnConnect = true
         sessionSequence += 1
         val session = BoardSession(id = sessionSequence)
         boardSession = session
-        when (val transport = start.boardConfig.transport) {
-            BoardTransport.Direct -> {
-                canId = null
-                directConnection = true
-            }
-            is BoardTransport.Can -> {
-                canId = transport.canId
-                directConnection = false
-            }
-            null -> {
-                canId = null
-                directConnection = false
-            }
-        }
         boardError = null
         telemetry = null
         latestBatterySoc = null
@@ -963,7 +945,7 @@ private var wearAutoLaunchOnConnect = true
         configSafetyReadScheduled = false
         telemetryPipeline.beginSession(session, start.boardConfig)
         // Tag telemetry frames with the CAN id resolved from the stored transport.
-        telemetryPipeline.updateCanId(canId)
+        telemetryPipeline.updateCanId(currentCanId)
         packetReassembler.reset()
         diagnosticsRecorder.resetTelemetryParseFailedCounters()
         connectionCoordinator.reset()
@@ -1022,6 +1004,19 @@ private var wearAutoLaunchOnConnect = true
         val deviceId = start.boardConfig.deviceId
         if (deviceId.isNullOrBlank()) {
             failStart(start, "INVALID_DEVICE", "Board session requires deviceId")
+            return
+        }
+        // Refuse before GATT rather than connecting into a link we can never poll: without a
+        // detected transport the session would reach WaitingForTelemetry and only ever time out.
+        if (start.boardConfig.transport == null) {
+            captureDiagnostic(
+                "ble_connect_failed",
+                diagnosticProperties(start.boardConfig, "connect") + mapOf(
+                    "message" to "Board Link has no detected transport",
+                    "error_code" to "NEEDS_LINK",
+                ),
+            )
+            failStartTerminal(start, "NEEDS_LINK", "Board Link has no detected transport — re-link this board")
             return
         }
         val attempt = connectionCoordinator.markConnectStarting(start)
@@ -1163,7 +1158,7 @@ private var wearAutoLaunchOnConnect = true
 
     private fun resolveBleConnect() {
         val start = connectionCoordinator.resolvePending() ?: return
-        Log.d(VESC_SESSION_TAG, "connect resolved attempt=${connectionCoordinator.connectAttempt} canId=$canId")
+        Log.d(VESC_SESSION_TAG, "connect resolved attempt=${connectionCoordinator.connectAttempt} transport=${currentBoardTransport()}")
         boardError = null
         recordLocalDiagnostic(
             "waiting_for_telemetry_started",
@@ -1552,11 +1547,22 @@ private var wearAutoLaunchOnConnect = true
     private fun startPolling() {
         val session = boardConfig ?: return
         val sessionToken = boardSession ?: return
-        val transport = currentBoardTransport() ?: return
         // Arm the board-ready timeout only once telemetry polling actually begins.
         // A stale stored transport still reaches this path and times out into reconnect.
         if (boardStatus == BoardPhase.WaitingForTelemetry) {
             armBoardReadyTimeout(session)
+        }
+        // An undetected transport cannot be polled, but it must never park the session in
+        // WaitingForTelemetry unwatched: the board-ready timeout above is already armed, so this
+        // self-heals into reconnect instead of waiting forever on telemetry nothing will send.
+        val transport = currentBoardTransport() ?: run {
+            recordLocalDiagnostic(
+                "telemetry_polling_unavailable",
+                session,
+                "telemetry",
+                mapOf("message" to "Telemetry polling unavailable: Board Link has no detected transport"),
+            )
+            return
         }
         telemetryPipeline.armStaleWatchdog()
         recordLocalDiagnostic(
@@ -1565,7 +1571,7 @@ private var wearAutoLaunchOnConnect = true
             "telemetry",
             mapOf(
                 "message" to "Telemetry polling started",
-                "polling_mode" to if (canId != null) "can" else if (directConnection) "direct" else "unavailable",
+                "polling_mode" to if (currentCanId != null) "can" else "direct",
                 "poll_interval_ms" to session.pollIntervalMs,
             ),
         )
@@ -1576,7 +1582,18 @@ private var wearAutoLaunchOnConnect = true
         watchTick.start()
     }
 
-    private fun currentBoardTransport(): BoardTransport? = boardTransport(canId, directConnection)
+    /**
+     * How the live Board Session addresses its Board. Derived from the Board Link the session was
+     * started with — never mutated mid-session. Detection belongs to the Board Probe alone (#106);
+     * a session that re-derived it at runtime could disagree with the link it was started from.
+     * `null` means the Board Link carries no detected transport, so this Board cannot be polled.
+     *
+     * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `startPolling`
+     */
+    private fun currentBoardTransport(): BoardTransport? = boardConfig?.transport
+
+    /** CAN id of the current transport, or `null` on a direct/undetected link. */
+    private val currentCanId: Int? get() = (currentBoardTransport() as? BoardTransport.Can)?.canId
 
     private fun stopPolling() {
         pollingLoop.stop()
@@ -1665,7 +1682,7 @@ private var wearAutoLaunchOnConnect = true
             return
         }
         cancelBoardReadyTimeout()
-        if (shouldStartPollingOnReady(canId, directConnection, pollingLoop.takeIf { it.isActive })) {
+        if (shouldStartPollingOnReady(currentBoardTransport(), pollingLoop.takeIf { it.isActive })) {
             startPolling()
         }
         if (boardStatus == BoardPhase.Connected) return
@@ -1787,8 +1804,6 @@ private var wearAutoLaunchOnConnect = true
             config = stoppedConfig,
         )
         connectionCoordinator.clearPending()
-        canId = null
-        directConnection = false
         fwVersionString = null
         telemetry = null
         boardSession?.invalidate()
@@ -1846,6 +1861,15 @@ private var wearAutoLaunchOnConnect = true
             start.onError(code, message)
             return
         }
+        failStartTerminal(start, code, message)
+    }
+
+    /**
+     * Fail a connect that retrying cannot fix, ignoring auto-reconnect. A Board Link defect follows
+     * the board across every attempt, so scheduling a reconnect would only spin until the rider
+     * intervenes — surface the error instead and let them re-link.
+     */
+    private fun failStartTerminal(start: PendingStart, code: String, message: String) {
         connectionCoordinator.clearPending()
         cancelBoardReadyTimeout()
         stopPolling()
@@ -2392,7 +2416,7 @@ private var wearAutoLaunchOnConnect = true
             phase = phase,
             timeoutMs = timeoutMs,
             status = { boardStatus },
-            canId = { canId },
+            canId = { currentCanId },
             onTimeout = ::onConnectPhaseTimeout,
         )
     }

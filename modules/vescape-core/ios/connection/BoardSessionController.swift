@@ -1500,6 +1500,10 @@ internal final class BoardSessionController: VescGattListener {
 
   // MARK: - Polling (response-paced; ADR 0015 dumb connect)
 
+  /// The session's transport is read from the Board Link it was started with and never mutated
+  /// mid-session — detection belongs to the Board Probe alone, so a reconnect reuses the same
+  /// transport rather than re-deriving one.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `currentBoardTransport`
   private func startPolling(session: BoardSession) {
     stopScheduledPolls()
     idlePauseDetector.reset()
