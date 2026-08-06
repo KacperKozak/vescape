@@ -37,6 +37,7 @@ interface MainMapSceneProps {
   approximateGpsPuckActive: boolean
   accuracyFix: LayerProps['accuracyFix']
   onPhoneFollowHeading: ComponentProps<typeof PhoneHeadingMapLayer>['onFollowHeading']
+  phoneHeadingAdapter: ComponentProps<typeof PhoneHeadingMapLayer>['adapter']
   onPhoneHeadingChange: ComponentProps<typeof PhoneHeadingMapLayer>['onHeadingChange']
   onPhoneHeadingStatusChange: ComponentProps<typeof PhoneHeadingMapLayer>['onStatusChange']
   mode: MainViewState
@@ -84,6 +85,7 @@ export function MainMapScene({
   approximateGpsPuckActive,
   accuracyFix,
   onPhoneFollowHeading,
+  phoneHeadingAdapter,
   onPhoneHeadingChange,
   onPhoneHeadingStatusChange,
   mode,
@@ -150,6 +152,7 @@ export function MainMapScene({
         />
         <PhoneHeadingMapLayer
           active={!historyActive && !gpsHeadingMode}
+          adapter={phoneHeadingAdapter}
           followCamera={phoneHeadingMode && followGps}
           approximateFix={approximateGpsPuckActive}
           coordinate={accuracyFix}

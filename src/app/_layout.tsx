@@ -18,10 +18,12 @@ import { Text } from '@/components/base/Text'
 import { DiagnosticErrorBoundary } from '@/modules/diagnostics/DiagnosticErrorBoundary'
 import { HeaderBackButton } from '@/components/base/HeaderBackButton'
 import { isDevelopmentApp } from '@/config/appVariant'
+import { showDevControls } from '@/config/env'
 import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
 import { startAlertsBoardSync } from '@/bootstrap/alertsBoardSync'
 import { startAppDataSync } from '@/bootstrap/appDataSync'
+import { useScreenshotFixtures } from '@/bootstrap/screenshotFixtures'
 import { startBoardWarningsSync } from '@/modules/board/store/boardWarningsStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useRiderStore } from '@/modules/group-ride/store/riderStore'
@@ -41,7 +43,7 @@ function requireClerkPublishableKey(): string {
 
 function DevelopmentBadge() {
   const insets = useSafeAreaInsets()
-  if (!isDevelopmentApp) return null
+  if (!isDevelopmentApp || !showDevControls) return null
 
   return (
     <View
@@ -112,7 +114,12 @@ function RootLayout() {
     if (fontsLoaded || fontError) void SplashScreen.hideAsync()
   }, [fontsLoaded, fontError])
 
+  // Screenshot mode restores a fixture database before anything reads it; every other build is
+  // ready on the first render.
+  const fixturesReady = useScreenshotFixtures()
+
   useEffect(() => {
+    if (!fixturesReady) return
     void useSettingsStore.getState().load()
     void useRiderStore.getState().load()
     useGroupRideStore.getState().startObserving()
@@ -127,11 +134,12 @@ function RootLayout() {
       stopAlertsBoardSync()
       stopAppStatusSync()
     }
-  }, [])
+  }, [fixturesReady])
 
   // Hold the splash until Raleway is ready (or fails to load). Returning null
   // keeps the native splash up without an unmount/mount churn.
   if (!fontsLoaded && !fontError) return null
+  if (!fixturesReady) return null
 
   return (
     <ClerkProvider

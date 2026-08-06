@@ -43,6 +43,7 @@ export function WeatherMapOverlay({
       <IconButton
         icon={ArrowLeftIcon}
         size="sm"
+        testID="weather-exit"
         accessibilityLabel="Back from weather"
         onPress={onExit}
         style={[styles.mapTopBackButton, { top }]}

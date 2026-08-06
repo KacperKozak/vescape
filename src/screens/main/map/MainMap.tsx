@@ -1,11 +1,12 @@
 import Mapbox from '@rnmapbox/maps'
 import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Animated } from 'react-native'
+import { Animated, View } from 'react-native'
 import type { LocationEvent, MapPoint, MapPointCategory } from 'vescape-core'
 
 import type { DirectionPoint } from '@/modules/map/store/mapStore'
 
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
+import { captureMode } from '@/config/env'
 import {
   MAP_DEFAULTS,
   type MapNavigationMode,
@@ -15,6 +16,7 @@ import type { MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import { getGpsPuckBearing } from '@/modules/map/lib/gpsPuckHeading'
+import { usePhoneHeadingAdapter } from '@/screens/main/map/usePhoneHeadingAdapter'
 import type {
   HistoryGpsSample,
   HistoryMarker,
@@ -227,6 +229,7 @@ export const MainMap = memo(
     const [phoneHeadingStatus, setPhoneHeadingStatus] = useState<PhoneHeadingStatus | 'idle'>(
       'idle',
     )
+    const phoneHeadingAdapter = usePhoneHeadingAdapter()
     const headingFollowMode = gpsHeadingMode || phoneHeadingMode
     useRenderRateWarning('MainMap')
     const followHeadingDeg = gpsHeadingMode
@@ -427,6 +430,20 @@ export const MainMap = memo(
       }
     }, [mode, offscreenMapIndicators, onOffscreenMapIndicatorsChange])
 
+    // Mapbox gives Maestro no idle signal, so a screenshot flow would otherwise have to guess with a
+    // sleep and can catch a half-drawn map. Publish the map's own idle event as a waitable marker.
+    const [mapSettled, setMapSettled] = useState(false)
+    useEffect(() => {
+      if (captureMode) setMapSettled(false)
+    }, [mode])
+    const handleIdle = useCallback(
+      (...args: Parameters<typeof handleMapIdle>) => {
+        handleMapIdle(...args)
+        if (captureMode) setMapSettled(true)
+      },
+      [handleMapIdle],
+    )
+
     if (!MAPBOX_ACCESS_TOKEN) {
       return <MapUnavailable />
     }
@@ -436,62 +453,68 @@ export const MainMap = memo(
     }
 
     return (
-      <MainMapScene
-        mapOpacity={mapOpacity}
-        onLayout={handleMapLayout}
-        onTouchStart={handleTouchStart}
-        mapViewRef={mapViewRef}
-        cameraRef={cameraRef}
-        mapStyle={mapStyle}
-        rotationLocked={rotationLocked}
-        onDidFinishLoadingMap={handleMapLoaded}
-        onPress={handleMapPress}
-        onLongPress={handleLongPress}
-        onMapIdle={handleMapIdle}
-        onCameraChanged={handleCameraChanged}
-        getLiveFollowCamera={getLiveFollowCamera}
-        historyActive={historyActive}
-        gpsHeadingMode={gpsHeadingMode}
-        phoneHeadingMode={phoneHeadingMode}
-        followGps={followGps}
-        approximateGpsPuckActive={approximateGpsPuckActive}
-        accuracyFix={accuracyFix}
-        onPhoneFollowHeading={handlePhoneFollowHeading}
-        onPhoneHeadingChange={handlePhoneHeadingChange}
-        onPhoneHeadingStatusChange={setPhoneHeadingStatus}
-        mode={mode}
-        weatherActive={weatherActive}
-        legalLimitsActive={legalLimitsActive}
-        liveTrailShape={liveTrailShape}
-        rideRouteShape={rideRouteShape}
-        accuracyShape={accuracyShape}
-        gpsPuckBearingDeg={gpsPuckBearingDeg}
-        riders={mapRiders}
-        rideRoute={rideRoute}
-        history={history}
-        cameraZoom={cameraZoom}
-        historyMetricGradientsEnabled={historyMetricGradientsEnabled}
-        historyMetricHotRanges={historyMetricHotRanges}
-        directionPoint={directionPoint}
-        activeNavigationTarget={activeNavigationTarget}
-        selectedNavigationTarget={selectedNavigationTarget}
-        mapPointProps={mapPointProps}
-        onSuppressNextMapPress={suppressNextMapPress}
-        onSelectMarker={setSelectedHistoryMarker}
-        onSelectLegalCountry={handleSelectLegalCountry}
-        onFocusDirectionPoint={handleFocusDirectionPoint}
-        overlays={{
-          selectedHistoryMarker,
-          selectedLegalCountry,
-          legalLimitsActive,
-          weatherActive,
-          showOffscreenIndicators: mode !== 'telemetry',
-          offscreenMapIndicators,
-          onDismissHistoryMarker: dismissHistoryMarker,
-          onCloseLegalCountry: closeLegalCountry,
-          onOffscreenIndicatorPress: handleOffscreenIndicatorPress,
-        }}
-      />
+      <>
+        {captureMode && mapSettled && (
+          <View testID="map-settled" collapsable={false} pointerEvents="none" />
+        )}
+        <MainMapScene
+          mapOpacity={mapOpacity}
+          onLayout={handleMapLayout}
+          onTouchStart={handleTouchStart}
+          mapViewRef={mapViewRef}
+          cameraRef={cameraRef}
+          mapStyle={mapStyle}
+          rotationLocked={rotationLocked}
+          onDidFinishLoadingMap={handleMapLoaded}
+          onPress={handleMapPress}
+          onLongPress={handleLongPress}
+          onMapIdle={handleIdle}
+          onCameraChanged={handleCameraChanged}
+          getLiveFollowCamera={getLiveFollowCamera}
+          historyActive={historyActive}
+          gpsHeadingMode={gpsHeadingMode}
+          phoneHeadingMode={phoneHeadingMode}
+          followGps={followGps}
+          approximateGpsPuckActive={approximateGpsPuckActive}
+          accuracyFix={accuracyFix}
+          onPhoneFollowHeading={handlePhoneFollowHeading}
+          phoneHeadingAdapter={phoneHeadingAdapter}
+          onPhoneHeadingChange={handlePhoneHeadingChange}
+          onPhoneHeadingStatusChange={setPhoneHeadingStatus}
+          mode={mode}
+          weatherActive={weatherActive}
+          legalLimitsActive={legalLimitsActive}
+          liveTrailShape={liveTrailShape}
+          rideRouteShape={rideRouteShape}
+          accuracyShape={accuracyShape}
+          gpsPuckBearingDeg={gpsPuckBearingDeg}
+          riders={mapRiders}
+          rideRoute={rideRoute}
+          history={history}
+          cameraZoom={cameraZoom}
+          historyMetricGradientsEnabled={historyMetricGradientsEnabled}
+          historyMetricHotRanges={historyMetricHotRanges}
+          directionPoint={directionPoint}
+          activeNavigationTarget={activeNavigationTarget}
+          selectedNavigationTarget={selectedNavigationTarget}
+          mapPointProps={mapPointProps}
+          onSuppressNextMapPress={suppressNextMapPress}
+          onSelectMarker={setSelectedHistoryMarker}
+          onSelectLegalCountry={handleSelectLegalCountry}
+          onFocusDirectionPoint={handleFocusDirectionPoint}
+          overlays={{
+            selectedHistoryMarker,
+            selectedLegalCountry,
+            legalLimitsActive,
+            weatherActive,
+            showOffscreenIndicators: mode !== 'telemetry',
+            offscreenMapIndicators,
+            onDismissHistoryMarker: dismissHistoryMarker,
+            onCloseLegalCountry: closeLegalCountry,
+            onOffscreenIndicatorPress: handleOffscreenIndicatorPress,
+          }}
+        />
+      </>
     )
   }),
 )

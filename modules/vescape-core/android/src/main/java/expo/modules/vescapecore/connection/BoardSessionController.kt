@@ -53,6 +53,9 @@ import expo.modules.vescapecore.service.VESC_SESSION_TAG
 import expo.modules.vescapecore.protocol.SessionTransport
 import expo.modules.vescapecore.protocol.VescGattClient
 import expo.modules.vescapecore.protocol.VescGattListener
+import expo.modules.vescapecore.replay.ReplayLocation
+import expo.modules.vescapecore.replay.ReplayHeading
+import expo.modules.vescapecore.replay.ReplayClock
 import expo.modules.vescapecore.replay.ReplayTransport
 import expo.modules.vescapecore.VescLiveStateSnapshot
 import expo.modules.vescapecore.protocol.VescPacketReassembler
@@ -83,10 +86,12 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.location.Location
+import android.location.LocationManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import java.io.File
 import kotlin.math.roundToInt
@@ -109,6 +114,8 @@ import expo.modules.vescapecore.runtime.HandlerScheduler
 import expo.modules.vescapecore.runtime.LinkIdentity
 import expo.modules.vescapecore.runtime.LinkIntegrity
 import expo.modules.vescapecore.runtime.Scheduler
+import expo.modules.vescapecore.runtime.SessionClock
+import expo.modules.vescapecore.runtime.SystemSessionClock
 import expo.modules.vescapecore.runtime.postDelayedForSession
 import expo.modules.vescapecore.telemetry.AppDataRepository
 import expo.modules.vescapecore.telemetry.AppSettings
@@ -218,8 +225,8 @@ internal class BoardSessionController(private val service: CoreForegroundService
                     connectionSeq = currentSessionId,
                     connectAttempt = connectionCoordinator.connectAttempt,
                     autoReconnectAttempt = reconnectScheduler.currentAttempt,
-                    canId = canId,
-                    directConnection = directConnection,
+                    canId = currentCanId,
+                    directConnection = currentBoardTransport() == BoardTransport.Direct,
                     lastSentCommand = lastSentCommand,
                     lastReceivedCommandByte = lastReceivedCommandByte,
                     lastTelemetryAt = telemetryPipeline.lastTelemetryAt,
@@ -231,8 +238,20 @@ internal class BoardSessionController(private val service: CoreForegroundService
         scheduler = scheduler,
         onTelemetryStale = ::onTelemetryStaleFired,
         captureBuilder = { parsed, cfg, id -> parsed.toCapture(cfg, id) },
+        nowMs = ::nowMs,
         staleTimeoutMs = TELEMETRY_STALE_MS,
     )
+    /**
+     * The clock this session stamps and compares its data against. Wall time for every real
+     * session; a replay swaps in its own for the session's lifetime so a warmed-up playback writes
+     * a timeline that agrees with itself. Set in [beginSession], never read directly — go through
+     * [nowMs].
+     */
+    @Volatile
+    private var sessionClock: SessionClock = SystemSessionClock
+
+    /** @see SessionClock */
+    private fun nowMs(): Long = sessionClock.nowMs()
     private val recordingCoordinator by lazy {
         RecordingCoordinator(
             context = service.applicationContext,
@@ -250,6 +269,7 @@ internal class BoardSessionController(private val service: CoreForegroundService
             historyFlushIntervalMs = HISTORY_FLUSH_INTERVAL_MS,
             liveSeriesIntervalMs = LIVE_SERIES_INTERVAL_MS,
             liveSeriesBuckets = LIVE_SERIES_BUCKETS,
+            speed = { sessionClock.speed },
         )
     }
     private val watchPusher by lazy {
@@ -292,8 +312,7 @@ internal class BoardSessionController(private val service: CoreForegroundService
                     ConfigConnectionSnapshot(
                         boardConfig,
                         boardStatus,
-                        canId,
-                        directConnection,
+                        currentBoardTransport(),
                         fwVersionString,
                         boardSession?.linkIntegrity ?: LinkIntegrity.Unknown,
                     )
@@ -415,7 +434,6 @@ internal class BoardSessionController(private val service: CoreForegroundService
             transport.clear(markIntentional = false)
             bmsSeriesRing.clear()
             telemetryPipeline.clearLiveTelemetry()
-            directConnection = false
             boardError = reason
             transitionBoardPhase(
                 next = BoardPhase.Reconnecting,
@@ -561,8 +579,6 @@ internal class BoardSessionController(private val service: CoreForegroundService
     // Latest cold-path values the watch tick reads alongside [telemetry]; reset when telemetry clears.
     private var latestBatterySoc: Double? = null
     private var latestDutyExcluded = false
-    private var canId: Int? = null
-    private var directConnection = false
     private var fwVersionString: String? = null
     private var boardReadyTimeoutHandle: Cancellable? = null
     private var gpsError: String? = null
@@ -902,31 +918,25 @@ private var wearAutoLaunchOnConnect = true
                 recordingName = it,
                 listener = gattListener,
                 dispatchListener = ::dispatchGattEvent,
+                onLocation = ::onReplayLocation,
+                onHeading = ::onReplayHeading,
+                clock = ReplayClock(
+                    warmupMs = start.boardConfig.replayWarmupMs,
+                    warmupSpeed = start.boardConfig.replayWarmupSpeed,
+                ),
             )
         }
+        // A replay owns the session's notion of time for its lifetime.
+        sessionClock = replayTransport?.clock ?: SystemSessionClock
         selectedBoardName = start.boardConfig.deviceName
         sessionSequence += 1
         val session = BoardSession(id = sessionSequence)
         boardSession = session
-        when (val transport = start.boardConfig.transport) {
-            BoardTransport.Direct -> {
-                canId = null
-                directConnection = true
-            }
-            is BoardTransport.Can -> {
-                canId = transport.canId
-                directConnection = false
-            }
-            null -> {
-                canId = null
-                directConnection = false
-            }
-        }
         boardError = null
         telemetry = null
         latestBatterySoc = null
         latestDutyExcluded = false
-        loadBatteryConfig(start.boardConfig.appBoardId)
+        loadBatteryConfig(start.boardConfig)
         socWindow.reset()
         bmsSeriesRing.clear()
         cellSpreadDetector.reset()
@@ -935,7 +945,7 @@ private var wearAutoLaunchOnConnect = true
         configSafetyReadScheduled = false
         telemetryPipeline.beginSession(session, start.boardConfig)
         // Tag telemetry frames with the CAN id resolved from the stored transport.
-        telemetryPipeline.updateCanId(canId)
+        telemetryPipeline.updateCanId(currentCanId)
         packetReassembler.reset()
         diagnosticsRecorder.resetTelemetryParseFailedCounters()
         connectionCoordinator.reset()
@@ -994,6 +1004,19 @@ private var wearAutoLaunchOnConnect = true
         val deviceId = start.boardConfig.deviceId
         if (deviceId.isNullOrBlank()) {
             failStart(start, "INVALID_DEVICE", "Board session requires deviceId")
+            return
+        }
+        // Refuse before GATT rather than connecting into a link we can never poll: without a
+        // detected transport the session would reach WaitingForTelemetry and only ever time out.
+        if (start.boardConfig.transport == null) {
+            captureDiagnostic(
+                "ble_connect_failed",
+                diagnosticProperties(start.boardConfig, "connect") + mapOf(
+                    "message" to "Board Link has no detected transport",
+                    "error_code" to "NEEDS_LINK",
+                ),
+            )
+            failStartTerminal(start, "NEEDS_LINK", "Board Link has no detected transport — re-link this board")
             return
         }
         val attempt = connectionCoordinator.markConnectStarting(start)
@@ -1135,7 +1158,7 @@ private var wearAutoLaunchOnConnect = true
 
     private fun resolveBleConnect() {
         val start = connectionCoordinator.resolvePending() ?: return
-        Log.d(VESC_SESSION_TAG, "connect resolved attempt=${connectionCoordinator.connectAttempt} canId=$canId")
+        Log.d(VESC_SESSION_TAG, "connect resolved attempt=${connectionCoordinator.connectAttempt} transport=${currentBoardTransport()}")
         boardError = null
         recordLocalDiagnostic(
             "waiting_for_telemetry_started",
@@ -1163,7 +1186,7 @@ private var wearAutoLaunchOnConnect = true
             COMM_BMS_GET_VALUES -> handleBmsPayload(payload)
             COMM_GET_CUSTOM_CONFIG_XML -> configController.onPayload(ConfigRWEvent.XmlPayloadReceived(payload))
             COMM_GET_CUSTOM_CONFIG -> configController.onPayload(
-                ConfigRWEvent.ConfigBytesPayloadReceived(payload, System.currentTimeMillis()),
+                ConfigRWEvent.ConfigBytesPayloadReceived(payload, nowMs()),
             )
             COMM_SET_CUSTOM_CONFIG -> configController.onPayload(ConfigRWEvent.SetConfigResponseReceived(payload))
             COMM_FORWARD_CAN -> {
@@ -1174,7 +1197,7 @@ private var wearAutoLaunchOnConnect = true
                         COMM_CUSTOM_APP_DATA -> handleCustomAppPayload(payload)
                         COMM_GET_CUSTOM_CONFIG_XML -> configController.onPayload(ConfigRWEvent.XmlPayloadReceived(payload))
                         COMM_GET_CUSTOM_CONFIG -> configController.onPayload(
-                            ConfigRWEvent.ConfigBytesPayloadReceived(payload, System.currentTimeMillis()),
+                            ConfigRWEvent.ConfigBytesPayloadReceived(payload, nowMs()),
                         )
                         COMM_SET_CUSTOM_CONFIG -> configController.onPayload(ConfigRWEvent.SetConfigResponseReceived(payload))
                     }
@@ -1204,7 +1227,7 @@ private var wearAutoLaunchOnConnect = true
             return
         }
         if ((payload[0].toInt() and 0xff) == COMM_CUSTOM_APP_DATA) {
-            val now = System.currentTimeMillis()
+            val now = nowMs()
             val parsed = parseRefloatGetAllData(
                 payload = payload,
                 avgLatency = updateLatency(now),
@@ -1259,7 +1282,7 @@ private var wearAutoLaunchOnConnect = true
 
     // @parity /modules/vescape-core/ios/connection/BoardSessionController.swift (handleBms)
     private fun handleBmsPayload(payload: ByteArray) {
-        val bms = parseBmsValues(payload, System.currentTimeMillis()) ?: return
+        val bms = parseBmsValues(payload, nowMs()) ?: return
         val session = boardSession
         val config = boardConfig
         if (session != null && config != null) {
@@ -1426,7 +1449,7 @@ private var wearAutoLaunchOnConnect = true
         if (!focused) return
         emitBmsSeries(
             "snapshot",
-            bmsSeriesRing.snapshot(telemetryPipeline.recentWindowMs(), System.currentTimeMillis()),
+            bmsSeriesRing.snapshot(telemetryPipeline.recentWindowMs(), nowMs()),
         )
     }
 
@@ -1524,11 +1547,22 @@ private var wearAutoLaunchOnConnect = true
     private fun startPolling() {
         val session = boardConfig ?: return
         val sessionToken = boardSession ?: return
-        val transport = currentBoardTransport() ?: return
         // Arm the board-ready timeout only once telemetry polling actually begins.
         // A stale stored transport still reaches this path and times out into reconnect.
         if (boardStatus == BoardPhase.WaitingForTelemetry) {
             armBoardReadyTimeout(session)
+        }
+        // An undetected transport cannot be polled, but it must never park the session in
+        // WaitingForTelemetry unwatched: the board-ready timeout above is already armed, so this
+        // self-heals into reconnect instead of waiting forever on telemetry nothing will send.
+        val transport = currentBoardTransport() ?: run {
+            recordLocalDiagnostic(
+                "telemetry_polling_unavailable",
+                session,
+                "telemetry",
+                mapOf("message" to "Telemetry polling unavailable: Board Link has no detected transport"),
+            )
+            return
         }
         telemetryPipeline.armStaleWatchdog()
         recordLocalDiagnostic(
@@ -1537,7 +1571,7 @@ private var wearAutoLaunchOnConnect = true
             "telemetry",
             mapOf(
                 "message" to "Telemetry polling started",
-                "polling_mode" to if (canId != null) "can" else if (directConnection) "direct" else "unavailable",
+                "polling_mode" to if (currentCanId != null) "can" else "direct",
                 "poll_interval_ms" to session.pollIntervalMs,
             ),
         )
@@ -1548,7 +1582,18 @@ private var wearAutoLaunchOnConnect = true
         watchTick.start()
     }
 
-    private fun currentBoardTransport(): BoardTransport? = boardTransport(canId, directConnection)
+    /**
+     * How the live Board Session addresses its Board. Derived from the Board Link the session was
+     * started with — never mutated mid-session. Detection belongs to the Board Probe alone (#106);
+     * a session that re-derived it at runtime could disagree with the link it was started from.
+     * `null` means the Board Link carries no detected transport, so this Board cannot be polled.
+     *
+     * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `startPolling`
+     */
+    private fun currentBoardTransport(): BoardTransport? = boardConfig?.transport
+
+    /** CAN id of the current transport, or `null` on a direct/undetected link. */
+    private val currentCanId: Int? get() = (currentBoardTransport() as? BoardTransport.Can)?.canId
 
     private fun stopPolling() {
         pollingLoop.stop()
@@ -1572,7 +1617,7 @@ private var wearAutoLaunchOnConnect = true
         )
     }
 
-    private fun isTelemetryStale(now: Long = System.currentTimeMillis()): Boolean =
+    private fun isTelemetryStale(now: Long = nowMs()): Boolean =
         now - telemetryPipeline.lastTelemetryAt >= TELEMETRY_STALE_MS
 
     private fun buildLiveTick(
@@ -1637,7 +1682,7 @@ private var wearAutoLaunchOnConnect = true
             return
         }
         cancelBoardReadyTimeout()
-        if (shouldStartPollingOnReady(canId, directConnection, pollingLoop.takeIf { it.isActive })) {
+        if (shouldStartPollingOnReady(currentBoardTransport(), pollingLoop.takeIf { it.isActive })) {
             startPolling()
         }
         if (boardStatus == BoardPhase.Connected) return
@@ -1669,7 +1714,7 @@ private var wearAutoLaunchOnConnect = true
 
     /** @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `onTelemetryStaleFired` */
     private fun onTelemetryStaleFired() {
-        val now = System.currentTimeMillis()
+        val now = nowMs()
         if (
             boardStatus != BoardPhase.Connected ||
             now - telemetryPipeline.lastTelemetryAt < TELEMETRY_STALE_MS
@@ -1739,7 +1784,7 @@ private var wearAutoLaunchOnConnect = true
 
     private fun stopCurrentBoardSession(emitDisconnected: Boolean) {
         // Final write so the persisted last battery is fresh, not up to 30s stale.
-        persistLastBattery(latestBatterySoc, telemetry?.batteryVoltage, System.currentTimeMillis(), force = true)
+        persistLastBattery(latestBatterySoc, telemetry?.batteryVoltage, nowMs(), force = true)
         remoteTiltController.stop()
         flushTelemetryDiagnostics("stop")
         configController.onSessionTerminated("Board session stopped during Refloat config op")
@@ -1749,6 +1794,9 @@ private var wearAutoLaunchOnConnect = true
         stopPolling()
         transport.clear(markIntentional = true)
         replayTransport = null
+        // The shifted clock belongs to the replay that installed it; anything running between here
+        // and the next session must not still be reading time from the past.
+        sessionClock = SystemSessionClock
         alertCoordinator.stopAllGeiger()
         recordingCoordinator.finishBoardSession(
             status = if (emitDisconnected) "disconnected" else "stopped",
@@ -1756,8 +1804,6 @@ private var wearAutoLaunchOnConnect = true
             config = stoppedConfig,
         )
         connectionCoordinator.clearPending()
-        canId = null
-        directConnection = false
         fwVersionString = null
         telemetry = null
         boardSession?.invalidate()
@@ -1815,6 +1861,15 @@ private var wearAutoLaunchOnConnect = true
             start.onError(code, message)
             return
         }
+        failStartTerminal(start, code, message)
+    }
+
+    /**
+     * Fail a connect that retrying cannot fix, ignoring auto-reconnect. A Board Link defect follows
+     * the board across every attempt, so scheduling a reconnect would only spin until the rider
+     * intervenes — surface the error instead and let them re-link.
+     */
+    private fun failStartTerminal(start: PendingStart, code: String, message: String) {
         connectionCoordinator.clearPending()
         cancelBoardReadyTimeout()
         stopPolling()
@@ -1920,7 +1975,7 @@ private var wearAutoLaunchOnConnect = true
         transitionBoardPhase(BoardPhase.Error)
     }
 
-    private fun reportedBoardPhase(nowMs: Long = System.currentTimeMillis()): BoardPhase =
+    private fun reportedBoardPhase(atMs: Long = nowMs()): BoardPhase =
         deriveReportedBoardPhase(
             ReportedBoardPhaseInput(
                 rawPhase = boardStatus,
@@ -1928,7 +1983,7 @@ private var wearAutoLaunchOnConnect = true
                 hasActiveBoardSession = boardSession?.let(::isCurrentBoardSession) == true,
                 isStoppingService = isStoppingService,
                 lastTelemetryAt = telemetryPipeline.lastTelemetryAt,
-                nowMs = nowMs,
+                nowMs = atMs,
             ),
         )
 
@@ -1949,7 +2004,7 @@ private var wearAutoLaunchOnConnect = true
     ) {
         if (isStoppingService || notificationRepaintSuppressed) return
         val phase = reportedBoardPhase()
-        if (!notificationGate.shouldPost(phase, System.currentTimeMillis(), force)) return
+        if (!notificationGate.shouldPost(phase, nowMs(), force)) return
         presenter.show(
             phase = phase,
             telemetry = telemetry,
@@ -1976,13 +2031,25 @@ private var wearAutoLaunchOnConnect = true
         CoreForegroundService.emitEvent?.invoke(name, body)
     }
 
+    /**
+     * The one place the phone's GPS is armed. A replay owns position for its whole session, so the
+     * guard lives here rather than at the call sites: the map, the settings toggle and the session
+     * start all ask for location updates independently, and a single live fix slipping through is
+     * enough to make the marker jump off the recorded track.
+     */
     private fun startLocationUpdates() {
+        if (boardConfig?.replayRecordingName != null) return
         gpsError = gpsMonitor.start()
         if (gpsError != null) emitState()
     }
 
     private fun stopLocationUpdates() {
         gpsMonitor.stop()
+    }
+
+    /** @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `recordPhoneHeading` */
+    fun recordPhoneHeading(headingDeg: Double) {
+        recordingCoordinator.currentRecorder()?.recordPhoneHeading(headingDeg)
     }
 
     fun setTelemetryRecordingEnabled(enabled: Boolean) {
@@ -2010,6 +2077,46 @@ private var wearAutoLaunchOnConnect = true
         resetIdlePause()
         recordingCoordinator.disableTelemetryRecording(session)
         emitState()
+    }
+
+    /**
+     * Feed a recorded fix into the same path a live one takes, so everything downstream — map,
+     * trail, ride stats, Group Ride presence — sees the ride exactly as it happened.
+     *
+     * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `onReplayLocation`
+     */
+    private fun onReplayLocation(fix: ReplayLocation) {
+        // GPS_PROVIDER, not a "replay" marker: the recorded fixes *were* GPS fixes, and
+        // `isPreciseGpsFix` keys off the provider — anything else downgrades the whole replayed
+        // track to approximate, which drops it from the trail and leaves the map on the phone's
+        // own position.
+        val location = Location(LocationManager.GPS_PROVIDER).apply {
+            latitude = fix.latitude
+            longitude = fix.longitude
+            time = nowMs()
+            // Shifted alongside `time` rather than read raw: a replay's session clock can sit
+            // minutes behind wall time, and a `Location` carrying one field from each timeline is a
+            // trap for whoever first computes a fix age from the monotonic one.
+            elapsedRealtimeNanos =
+                SystemClock.elapsedRealtimeNanos() -
+                    (System.currentTimeMillis() - nowMs()) * 1_000_000
+            fix.speedMps?.let { speed = it }
+            fix.bearingDeg?.let { bearing = it }
+            fix.accuracyM?.let { accuracy = it }
+            fix.altitudeM?.let { altitude = it }
+        }
+        onLocationUpdated(location)
+    }
+
+    /**
+     * Hand a recorded compass reading back to JS, which owns the magnetometer and therefore has to
+     * be the one to feed it into the map. Emitted rather than applied natively for the same reason
+     * it was recorded from JS: the sensor lives there.
+     *
+     * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `onReplayHeading`
+     */
+    private fun onReplayHeading(heading: ReplayHeading) {
+        emitEvent("onReplayPhoneHeading", mapOf("headingDeg" to heading.headingDeg))
     }
 
     private fun onLocationUpdated(location: Location) {
@@ -2179,14 +2286,29 @@ private var wearAutoLaunchOnConnect = true
         }
     }
 
-    private fun loadBatteryConfig(appBoardId: String?) {
+    /**
+     * Resolve the pack config the SoC estimator reads for this session.
+     *
+     * iOS resolves the same fallback when it builds the replay `BoardConnectConfig`.
+     * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `startReplay`
+     */
+    private fun loadBatteryConfig(config: SessionConfig?) {
+        val appBoardId = config?.appBoardId
         if (appBoardId == null) {
             batteryConfigCache = null
             return
         }
         batteryConfigCache = try {
             val board = kotlinx.coroutines.runBlocking {
-                AppDataRepository.get(service.applicationContext).getBoard(appBoardId)
+                val repo = AppDataRepository.get(service.applicationContext)
+                repo.getBoard(appBoardId)
+                    // A replay session runs under a synthetic `replay:` board id, which has no board
+                    // row and therefore no pack config — the SoC estimate would stay null for the
+                    // whole playback and the battery bar would read nothing. The recording is a ride
+                    // of a real board, so borrow the selected board's pack to size it.
+                    ?: config.replayRecordingName?.let {
+                        repo.getTypedSettings().selectedBoardId?.let { id -> repo.getBoard(id) }
+                    }
             }
             board?.get("batteryConfig") as? Map<String, Any?>
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -2205,7 +2327,7 @@ private var wearAutoLaunchOnConnect = true
 
     fun applyLiveHistoryLimitMinutes(minutes: Int) {
         telemetryPipeline.setLiveHistoryLimitMinutes(minutes)
-        locationTracker.pruneRecentLocations(System.currentTimeMillis())
+        locationTracker.pruneRecentLocations(nowMs())
     }
 
     private fun refreshLiveHistoryLimit() {
@@ -2294,7 +2416,7 @@ private var wearAutoLaunchOnConnect = true
             phase = phase,
             timeoutMs = timeoutMs,
             status = { boardStatus },
-            canId = { canId },
+            canId = { currentCanId },
             onTimeout = ::onConnectPhaseTimeout,
         )
     }

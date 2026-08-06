@@ -39,6 +39,14 @@ export interface CameraEngineTarget {
 export interface CameraEngineConfig {
   /** Called once per frame while any spring is in motion. */
   applyFrame: (camera: EngineCamera) => void
+  /**
+   * Cancel whatever the map is animating on its own — a fling, mostly. Called
+   * once when an app-issued target takes the camera, never per frame: the
+   * engine's own writes go through a non-transitioning setter that leaves
+   * native animators running, and a live fling overwrites every frame it
+   * writes.
+   */
+  cancelNativeMotion?: () => void
   /** Stiffness per axis, rad/s. */
   omega?: Partial<CameraEngineOmega>
   /** Pitch derived from the animated zoom each frame, unless a pitch target was set explicitly. */
@@ -64,6 +72,12 @@ export interface CameraEngineConfig {
    * `driveExternal`.
    */
   maxDriveJumpPx?: number
+  /**
+   * How long the engine keeps asserting the camera after landing on a target.
+   * A native fling decelerates on its own animator, which no JS call cancels;
+   * holding the frame loop open re-writes the camera over what is left of it.
+   */
+  holdAfterTargetMs?: number
   /** Injectable for tests. Defaults to requestAnimationFrame. */
   scheduleFrame?: (callback: (timestampMs: number) => void) => number
   cancelFrame?: (handle: number) => void
@@ -92,6 +106,7 @@ export const CAMERA_ENGINE_DEFAULT_BALLISTIC_FIT_PX = 320
 export const CAMERA_ENGINE_DEFAULT_BALLISTIC_MIN_ZOOM = 3
 const CAMERA_ENGINE_DEFAULT_ECHO_WINDOW_MS = 300
 const CAMERA_ENGINE_DEFAULT_MAX_DRIVE_JUMP_PX = 200
+const CAMERA_ENGINE_DEFAULT_HOLD_AFTER_TARGET_MS = 500
 
 /** Web-mercator meters per pixel at zoom 0 (256px tiles). */
 const METERS_PER_PIXEL_ZOOM_0 = 156_543.033_92
@@ -184,6 +199,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
   const teleportDistanceM = config.teleportDistanceM ?? CAMERA_ENGINE_DEFAULT_TELEPORT_DISTANCE_M
   const echoWindowMs = config.echoWindowMs ?? CAMERA_ENGINE_DEFAULT_ECHO_WINDOW_MS
   const maxDriveJumpPx = config.maxDriveJumpPx ?? CAMERA_ENGINE_DEFAULT_MAX_DRIVE_JUMP_PX
+  const holdAfterTargetMs = config.holdAfterTargetMs ?? CAMERA_ENGINE_DEFAULT_HOLD_AFTER_TARGET_MS
   const scheduleFrame =
     config.scheduleFrame ?? ((callback) => requestAnimationFrame(callback) as unknown as number)
   const cancelFrame =
@@ -213,6 +229,15 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
   let destroyed = false
   /** When the engine last wrote the camera; echoes of that write follow it. */
   let lastEmitMs = Number.NEGATIVE_INFINITY
+  /**
+   * A target the app asked for is in flight. The map is not authoritative until
+   * it lands: a fling started before the target keeps reporting its own
+   * deceleration, and taking those samples would retarget the springs onto
+   * wherever the throw was heading. Only a finger clears it.
+   */
+  let targetOwned = false
+  /** Deadline until which a landed target keeps being re-asserted; null when idle. */
+  let holdUntilMs: number | null = null
   const now = config.now ?? (() => Date.now())
 
   const toCamera = (s: EngineSprings): EngineCamera => ({
@@ -312,6 +337,16 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
         padding: s.padding.map((p) => snapSpring(p, p.target)) as EngineSprings['padding'],
       }
       emit(springs)
+      // Landing is not arriving: a fling animator the map started before this
+      // target is still writing the camera, and it outlives the springs. Keep
+      // the loop open for the hold window so every one of those writes is
+      // overwritten by the target, then let go.
+      if (holdUntilMs != null && now() < holdUntilMs) {
+        frameHandle = scheduleFrame(frame)
+        return
+      }
+      holdUntilMs = null
+      targetOwned = false
       lastFrameMs = null
       return
     }
@@ -320,8 +355,21 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
 
   const ensureLoop = () => {
     if (destroyed || frameHandle != null) return
-    if (springs && settled(springs)) return
+    if (springs && settled(springs) && (holdUntilMs == null || now() >= holdUntilMs)) {
+      holdUntilMs = null
+      targetOwned = false
+      return
+    }
     frameHandle = scheduleFrame(frame)
+  }
+
+  /** Claim the camera for an app-issued target and arm the post-landing hold. */
+  const claimTarget = () => {
+    // Only the first claim cancels: retargets during an animation the engine
+    // already owns have nothing native left to stop.
+    if (!targetOwned) config.cancelNativeMotion?.()
+    targetOwned = true
+    holdUntilMs = now() + holdAfterTargetMs
   }
 
   const resolvePitchTarget = (target: CameraEngineTarget, zoomTarget: number) => {
@@ -339,6 +387,8 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
   const reset = (camera: EngineCamera) => {
     stopLoop()
     lastDriveMs = null
+    targetOwned = false
+    holdUntilMs = null
     zoomUserTarget = camera.zoomLevel
     const padding = camera.padding
     springs = {
@@ -356,6 +406,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
   const snap = (target: CameraEngineTarget) => {
     if (!springs) return
     lastDriveMs = null
+    claimTarget()
     const s = springs
     if (target.zoom != null) zoomUserTarget = target.zoom
     const zoomTarget = target.zoom ?? zoomUserTarget
@@ -378,6 +429,7 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
   const setTarget = (target: CameraEngineTarget) => {
     if (!springs) return
     lastDriveMs = null
+    claimTarget()
     if (target.center) {
       const from = { longitude: springs.lng.x, latitude: springs.lat.x }
       const to = { longitude: target.center[0], latitude: target.center[1] }
@@ -411,6 +463,16 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
       return
     }
     const sampleMs = now()
+    if (options?.gesture) {
+      // A finger takes the camera back: whatever target was in flight is gone.
+      targetOwned = false
+      holdUntilMs = null
+    } else if (targetOwned) {
+      // Momentum from a throw that predates the target, or an echo of the
+      // engine's own write. Neither is a driver.
+      lastDriveMs = null
+      return
+    }
     // The map answers every camera write with a change event, and that echo
     // arrives a frame or more later — long after the synchronous `emitting`
     // guard has closed. Two echoes straddling one write (the stale camera, then
@@ -471,6 +533,8 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
   const release = () => {
     if (!springs) return
     lastDriveMs = null
+    targetOwned = false
+    holdUntilMs = null
     const s = springs
     const coast = (spring: SpringState, axisOmega: number) =>
       retargetSpring(spring, spring.x + spring.v / axisOmega)
@@ -489,6 +553,8 @@ export function createCameraEngine(config: CameraEngineConfig): CameraEngine {
   const stop = () => {
     stopLoop()
     lastDriveMs = null
+    targetOwned = false
+    holdUntilMs = null
     if (!springs) return
     const s = springs
     springs = {
