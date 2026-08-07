@@ -4,7 +4,7 @@
  *
  * @parity /scripts/lib/iosCapture.ts
  */
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, statSync } from 'fs'
 import { homedir } from 'os'
 import { basename, dirname, join } from 'path'
 
@@ -255,13 +255,27 @@ export async function createAndroidDriver(
         // with EACCES and the run silently captures an empty app. Reopening both levels is what
         // makes the push readable.
         await adb('shell', 'chmod', '777', DEVICE_FIXTURE_DIR, dirname(DEVICE_FIXTURE_DIR))
-        // `capture` discards exit codes, so a rejected push used to reach the flows as an app with
+        // The push does not land on `Android/data` directly: `adb push` chowns what it writes, and
+        // FUSE refuses that ("remote fchown failed: Operation not permitted") *after* transferring
+        // the bytes, so the push exits non-zero on a file that is actually there. Staging through
+        // `/data/local/tmp` (plain ext4, owned by `shell`) keeps the exit code meaningful, and
+        // `cp` as `shell` into the reopened dir needs no chown at all.
+        const staging = `/data/local/tmp/${basename(FIXTURE_ZIP)}`
+        await runOrDie(['adb', '-s', device.serial, 'push', FIXTURE_ZIP, staging])
+        await adb('shell', 'cp', staging, remote)
+        // `cp` keeps the creating process's umask, so the copy lands unreadable to the app's uid.
+        await adb('shell', 'chmod', '666', remote)
+        await adb('shell', 'rm', '-f', staging)
+        // `capture` discards exit codes, so a rejected copy used to reach the flows as an app with
         // an empty database — the run then failed several steps later on a missing board, pointing
-        // at the app rather than at the staging that never happened. Assert the file is there.
-        await runOrDie(['adb', '-s', device.serial, 'push', FIXTURE_ZIP, remote])
-        const staged = await adb('shell', 'ls', remote)
-        if (!staged.includes(remote)) {
-          console.error(`Fixture zip is not on ${device.name} at ${remote} after the push.`)
+        // at the app rather than at the staging that never happened. Assert the whole file landed.
+        const expected = statSync(FIXTURE_ZIP).size
+        const staged = (await adb('shell', 'stat', '-c', '%s', remote)).trim()
+        if (staged !== String(expected)) {
+          console.error(
+            `Fixture zip did not land on ${device.name} at ${remote}: ` +
+              `expected ${expected} bytes, got "${staged}".`,
+          )
           process.exit(1)
         }
       } else {
