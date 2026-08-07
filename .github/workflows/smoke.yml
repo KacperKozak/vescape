@@ -1,20 +1,39 @@
 # Smoke run on a hosted emulator.
 #
-# Dispatch-only for now. The run takes ~10 minutes and drives a live UI, so it is not a PR gate
-# until it has proven itself stable by hand a few times.
+# Post-merge signal on `dev`, not a PR gate. The run takes ~13 minutes and drives a live UI over a
+# software-rendered emulator, so it is the kind of check that earns a gate slot by proving it does
+# not flake — until then a red `dev` run is a page, not a block.
 name: Smoke
 
 on:
-  # TEMPORARY: `workflow_dispatch` only works once the file is on the default branch, so this is how
-  # the workflow gets exercised before it is merged. Remove before this branch lands.
+  # Only what can change what the app does on screen. Docs, release notes and the Wear module cannot
+  # move these flows, and a smoke run they cannot fail is 13 minutes of noise.
   push:
-    branches: [smoke-test]
+    branches: [dev]
+    paths:
+      - 'src/**'
+      - 'modules/**'
+      - 'shared/**'
+      - 'plugins/**'
+      - 'patches/**'
+      - 'e2e/**'
+      - 'scripts/**'
+      - 'assets/images/**'
+      - 'app.config.ts'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/smoke.yml'
   workflow_dispatch:
     inputs:
       flow:
         description: Single flow to run (e.g. 03-history). Empty runs all of them.
         required: false
         type: string
+
+# Merges to `dev` can land faster than a 13-minute run, and only the tip is worth knowing about.
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   smoke:
