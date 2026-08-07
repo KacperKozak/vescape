@@ -44,11 +44,9 @@ jobs:
   parallel-probe:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - name: sleep A
-        background: true
-        run: sleep 20
-      - name: sleep B
-        background: true
-        run: sleep 20
-      - wait-all
+      - parallel:
+          - name: sleep A
+            run: sleep 20
+          - name: sleep B
+            run: sleep 20
       - run: echo "both done"
