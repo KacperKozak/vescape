@@ -1,3 +1,5 @@
+import { useUser } from '@clerk/expo'
+
 import type { BackupSlot } from '@/modules/profile/lib/backupSlot'
 
 /**
@@ -7,10 +9,11 @@ import type { BackupSlot } from '@/modules/profile/lib/backupSlot'
  * `signedOut`, `upToDate` → `idle`, `syncing` → `syncing` with `backupProgress()` counts, and the
  * paused/offline reasons once the tile has copy for them.
  *
- * Until the uploader exists there is no backup for any Rider, signed in or not, so this reports
- * `unavailable` unconditionally: offering "sign in to back up" would promise a capability this
- * build does not have.
+ * Until the uploader exists, no Rider is backing anything up. A signed-out Rider reads as
+ * `signedOut` (the cell states the fact and offers sign-in, without claiming an account would
+ * start a backup); a signed-in one reads as `unavailable`.
  */
 export function useBackupSlot(): BackupSlot {
-  return { kind: 'unavailable' }
+  const { isSignedIn } = useUser()
+  return isSignedIn ? { kind: 'unavailable' } : { kind: 'signedOut' }
 }

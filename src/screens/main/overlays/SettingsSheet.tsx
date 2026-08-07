@@ -163,8 +163,8 @@ function BackupCell({ backup, onSignIn }: { backup: BackupSlot; onSignIn: () => 
       <StripCell
         icon={ArrowsClockwiseIcon}
         accent={theme.palette.slate.textMuted}
-        value="Off"
-        label="Sign in"
+        value="Sync"
+        label="No account"
         dim
         onPress={onSignIn}
         accessibilityLabel="Sign in to back up your rides"
@@ -177,8 +177,8 @@ function BackupCell({ backup, onSignIn }: { backup: BackupSlot; onSignIn: () => 
       <StripCell
         icon={ArrowsClockwiseIcon}
         accent={theme.palette.slate.textMuted}
-        value={DASH}
-        label="Backup"
+        value="Sync"
+        label="Unavailable"
         dim
         accessibilityLabel="Backup is not available in this build"
       />
