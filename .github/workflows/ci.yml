@@ -9,6 +9,8 @@ on:
 jobs:
   check:
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    env:
+      GRADLE_OPTS: -Dorg.gradle.caching=true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,6 +23,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-android-sdk
+          path: /usr/local/lib/android/sdk
+      - uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-gradle
+          path: ~/.gradle
       - uses: android-actions/setup-android@v3
       - run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
       - run: bun install
