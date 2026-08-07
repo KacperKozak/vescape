@@ -32,13 +32,15 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
       - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
       # The Android SDK download is independent of everything JS, so it overlaps
       # with install + the pure-JS checks. Only the Gradle test below needs both.
       - run: bun install
       - run: bun run copy:shared
       - parallel:
           - name: Install Android SDK components
-            run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+            run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
           - run: bun run ts
           - run: bun run lint
           - run: bun run format:check
