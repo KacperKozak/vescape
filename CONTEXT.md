@@ -240,6 +240,10 @@ _Avoid_: fast-forward, playback rate, time scale
 A user-controlled app preference that affects app behavior across boards unless explicitly scoped elsewhere.
 _Avoid_: Option, config
 
+**Settings Drawer**:
+The edge drawer behind the top-right button on the main screen: the **Vescape Account**, the app's live self-status (backup, version, storage), the few settings worth one tap, and one link to Advanced settings for everything else. Its button wears whatever inside it needs attention — a required update, or a running backup with its progress — the way the Social button wears an active **Group Ride**.
+_Avoid_: settings menu, settings popover, quick settings
+
 **Board Setting**:
 A rider-adjustable preference or soft state scoped to one **Board**, stored schemalessly per Board (key-value). Distinct from Board identity and probe-confirmed facts (name, **Board Link**), which are structured Board fields. Examples: battery configuration, **Alert Preset** levels, **Board Top Speed**.
 _Avoid_: Board config, per-board App Setting
