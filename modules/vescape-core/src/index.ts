@@ -987,6 +987,11 @@ export interface AppSettings {
   >
   /** Battery SoC Estimate median window, seconds. 0 = off. See ADR-0016. */
   socEstimateWindowSeconds: number
+  /**
+   * Board Move strength as a percentage of the full remote input, 10..100. The board still clamps
+   * the result with its own `remote.max_move_speed` / `remote_throttle_current_max`.
+   */
+  boardMoveStrengthPercent: number
   /** Play on/off sounds on board connect and involuntary disconnect. */
   connectionSoundsEnabled: boolean
   /** Android-only: use CompanionDeviceManager presence to connect selected board when nearby. */
@@ -1562,6 +1567,8 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   lockRemoteTilt(value: number): Promise<boolean>
   releaseRemoteTilt(value: number, durationMs: number): Promise<boolean>
   stopRemoteTilt(): Promise<boolean>
+  startBoardMove(input: number): Promise<boolean>
+  stopBoardMove(): Promise<boolean>
   getTuneProfiles(boardId: string, refloatBaseVersion?: string | null): Promise<TuneProfile[]>
   getTuneProfile(profileId: string): Promise<TuneProfile | null>
   createProfile(
@@ -2196,6 +2203,27 @@ export async function releaseRemoteTilt(value: number, durationMs: number): Prom
 export async function stopRemoteTilt(): Promise<boolean> {
   if (E2E_ENABLED) return true
   return native.stopRemoteTilt()
+}
+
+/**
+ * Hold a Board Move input until {@link stopBoardMove}. `input` is `-127..127`:
+ * positive moves the board forward, negative backward, `0` stops. Unlike Remote
+ * Tilt this drives motor output, and the firmware honours it only while the
+ * board is disengaged (ready). Native repeats the input on a tick, because the
+ * board drops the request after ~1s of silence.
+ *
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/protocol/VescProtocol.kt `buildBoardMoveCommand`
+ * @parity /modules/vescape-core/ios/protocol/VescProtocol.swift `buildBoardMoveCommand`
+ */
+export async function startBoardMove(input: number): Promise<boolean> {
+  if (E2E_ENABLED) return true
+  return native.startBoardMove(input)
+}
+
+/** Stop moving and send a neutral input so the board halts immediately. */
+export async function stopBoardMove(): Promise<boolean> {
+  if (E2E_ENABLED) return true
+  return native.stopBoardMove()
 }
 
 export async function getTuneProfiles(

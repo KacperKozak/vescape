@@ -551,6 +551,12 @@ class VescapeCoreModule : Module() {
     AsyncFunction("stopRemoteTilt") {
       CoreForegroundService.stopRemoteTilt()
     }
+    AsyncFunction("startBoardMove") { input: Int ->
+      CoreForegroundService.startBoardMove(input)
+    }
+    AsyncFunction("stopBoardMove") {
+      CoreForegroundService.stopBoardMove()
+    }
     AsyncFunction("pushProfileToBoard") { profileId: String, promise: Promise ->
       CoreForegroundService.pushProfileToBoard(
         context.applicationContext,

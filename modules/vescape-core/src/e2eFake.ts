@@ -68,6 +68,7 @@ const e2eSettings: AppSettings = {
   historyMetricGradientsEnabled: true,
   historyMetricHotRanges: {},
   socEstimateWindowSeconds: 20,
+  boardMoveStrengthPercent: 60,
   connectionSoundsEnabled: true,
   companionPresenceEnabled: false,
   boardWarningsEnabled: true,

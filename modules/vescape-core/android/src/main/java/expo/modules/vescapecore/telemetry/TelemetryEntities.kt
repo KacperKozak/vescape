@@ -369,6 +369,7 @@ data class AppSettings(
   val historyMetricGradientsEnabled: Boolean = true,
   val historyMetricHotRanges: Map<String, Map<String, Double>> = DEFAULT_HISTORY_METRIC_HOT_RANGES,
   val socEstimateWindowSeconds: Int = 20,
+  val boardMoveStrengthPercent: Int = 60,
   val connectionSoundsEnabled: Boolean = true,
   val telemetryPollRateHz: Int = 20,
   val wearMirrorIntervalMs: Int = 500,

@@ -471,6 +471,9 @@ final class AppDataRepository {
       // persist a malformed value that reads back truthy.
       guard let flag = rawValue as? Bool else { return }
       value = flag
+    } else if key == "boardMoveStrengthPercent" {
+      guard let percent = Self.boardMoveStrengthPercent(rawValue) else { return }
+      value = percent
     } else if key == "dismissedCommunityMessageIds" {
       guard let ids = Self.dismissedCommunityMessageIds(rawValue) else { return }
       value = ids
@@ -540,6 +543,7 @@ final class AppDataRepository {
     "satelliteImagerySaturation": -0.35,
     "hideTelemetryMapDetails": true,
     "telemetryPollRateHz": 20,
+    "boardMoveStrengthPercent": 60,
     "historyMetricGradientsEnabled": true,
     "historyMetricHotRanges": [
       "speed": ["start": 30, "end": 40],
@@ -562,11 +566,21 @@ final class AppDataRepository {
       satelliteImageryOpacity(settings["satelliteMapImageryOpacity"]) ?? defaultSettings["satelliteMapImageryOpacity"]
     normalized["satelliteImagerySaturation"] =
       satelliteImagerySaturation(settings["satelliteImagerySaturation"]) ?? defaultSettings["satelliteImagerySaturation"]
+    normalized["boardMoveStrengthPercent"] =
+      boardMoveStrengthPercent(settings["boardMoveStrengthPercent"]) ?? defaultSettings["boardMoveStrengthPercent"]
     normalized["legalPolicy"] = normalizeLegalPolicy(settings["legalPolicy"]) ?? NSNull()
     normalized["dismissedCommunityMessageIds"] =
       dismissedCommunityMessageIds(settings["dismissedCommunityMessageIds"]) ?? [String]()
     normalized["legalPolicy"] = normalizeLegalPolicy(settings["legalPolicy"]) ?? NSNull()
     return normalized
+  }
+
+  /// Board Move strength, percent of full remote input. Floored so a stored `0` cannot mean
+  /// "no move", and a negative value cannot invert the direction buttons.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `validBoardMoveStrengthPercent`
+  static func boardMoveStrengthPercent(_ value: Any?) -> Int? {
+    guard let number = value as? NSNumber, !(value is Bool) else { return nil }
+    return min(100, max(10, number.intValue))
   }
 
   /// Acknowledged Community Message IDs: a de-duplicated list of non-empty ID strings, or `nil` when
