@@ -34,19 +34,17 @@ jobs:
       - uses: android-actions/setup-android@v3
       # The Android SDK download is independent of everything JS, so it overlaps
       # with install + the pure-JS checks. Only the Gradle test below needs both.
+      - run: bun install
+      - run: bun run copy:shared
       - parallel:
           - name: Install Android SDK components
             run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
-          - name: JS checks
-            run: |
-              bun install
-              bun run copy:shared
-              bun run release-notes:check
-              bun run ts
-              bun run lint
-              bun run format:check
-              bun run knip
-              bun run test:bun
+          - run: bun run ts
+          - run: bun run lint
+          - run: bun run format:check
+          - run: bun run knip
+          - run: bun run test:bun
+          - run: bun run release-notes:check
       - run: bun x expo prebuild --platform android --no-install
       - run: bun run test:android
       - name: Release Gradle file handles
