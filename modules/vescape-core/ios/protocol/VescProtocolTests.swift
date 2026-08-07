@@ -33,7 +33,7 @@ final class VescProtocolTests: XCTestCase {
   func testBuildsBoardMoveRcMoveCommandForOlderRefloat() {
     // [CUSTOM_APP_DATA, magic, RC_MOVE, direction, current, time, current + time]
     XCTAssertEqual(
-      [UInt8(COMM_CUSTOM_APP_DATA), 101, 7, 1, 30, 1, 31],
+      [UInt8(COMM_CUSTOM_APP_DATA), 101, 7, 1, 60, 1, 61],
       buildBoardMoveCommand(transport: .direct, generation: .rcMove, input: 127)
     )
     XCTAssertEqual(

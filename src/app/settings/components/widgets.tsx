@@ -209,15 +209,6 @@ function StepperWidgetShowcase() {
         onPrevious={() => {}}
         onNext={() => {}}
       />
-      <SizeLabel>hold to act</SizeLabel>
-      <StepperWidget
-        icon={ArrowsDownUpIcon}
-        label="Move board"
-        accent={theme.palette.cyan.color}
-        onPreviousPressIn={() => {}}
-        onNextPressIn={() => {}}
-        onPressOut={() => {}}
-      />
       <SizeLabel>disabled</SizeLabel>
       <StepperWidget
         icon={ArrowsDownUpIcon}

@@ -106,7 +106,7 @@ class BoardMoveControllerTest {
 
         controller.hold(127)
         // [CUSTOM_APP_DATA, magic, RC_MOVE, direction, current, time, current + time]
-        assertArrayEquals(byteArrayOf(36, 101, 7, 1, 30, 1, 31), sent.single())
+        assertArrayEquals(byteArrayOf(36, 101, 7, 1, 60, 1, 61), sent.single())
 
         controller.stop()
         assertArrayEquals(byteArrayOf(36, 101, 7, 1, 0, 1, 1), sent.last())

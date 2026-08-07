@@ -987,6 +987,11 @@ export interface AppSettings {
   >
   /** Battery SoC Estimate median window, seconds. 0 = off. See ADR-0016. */
   socEstimateWindowSeconds: number
+  /**
+   * Board Move strength as a percentage of the full remote input, 10..100. The board still clamps
+   * the result with its own `remote.max_move_speed` / `remote_throttle_current_max`.
+   */
+  boardMoveStrengthPercent: number
   /** Play on/off sounds on board connect and involuntary disconnect. */
   connectionSoundsEnabled: boolean
   /** Android-only: use CompanionDeviceManager presence to connect selected board when nearby. */

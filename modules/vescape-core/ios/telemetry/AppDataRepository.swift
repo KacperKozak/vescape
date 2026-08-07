@@ -540,6 +540,7 @@ final class AppDataRepository {
     "satelliteImagerySaturation": -0.35,
     "hideTelemetryMapDetails": true,
     "telemetryPollRateHz": 20,
+    "boardMoveStrengthPercent": 60,
     "historyMetricGradientsEnabled": true,
     "historyMetricHotRanges": [
       "speed": ["start": 30, "end": 40],

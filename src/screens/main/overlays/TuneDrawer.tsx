@@ -8,7 +8,6 @@ import Animated, {
 } from 'react-native-reanimated'
 import { Text } from '@/components/base/Text'
 import {
-  ArrowsDownUpIcon,
   FadersIcon,
   FootprintsIcon,
   LightbulbIcon,
@@ -19,6 +18,7 @@ import {
 } from 'phosphor-react-native'
 import { router } from 'expo-router'
 
+import { BoardMoveControl } from '@/modules/board/components/BoardMoveControl'
 import { RemoteTiltControl } from '@/modules/board/components/RemoteTiltControl'
 import { InfoModal } from '@/components/modals/InfoModal'
 import {
@@ -26,7 +26,6 @@ import {
   tuneProfileIconComponent,
 } from '@/modules/tune/components/TuneProfileMetadataModal'
 import { SelectWidget } from '@/components/widgets/SelectWidget'
-import { StepperWidget } from '@/components/widgets/StepperWidget'
 import { SwitchWidget } from '@/components/widgets/SwitchWidget'
 import { widgetSurface } from '@/components/widgets/widgetSurface'
 import { canRunFirmwareCommand } from '@/modules/board/lib/boardLinkIntegrity'
@@ -34,7 +33,6 @@ import { legalPolicyFromReference } from '@/modules/legal/lib/legalMode'
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
 import { errorMessage } from '@/helpers/error'
-import { useBoardMoveControl } from '@/modules/board/hooks/useBoardMoveControl'
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useBoardStore } from '@/modules/board/store/boardStore'
 import { useLegalModeStore } from '@/modules/legal/store/legalModeStore'
@@ -87,7 +85,6 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   const boardConnected = useBleStore((state) => state.status === 'connected')
   const linkIntegrity = useBleStore((state) => state.linkIntegrity)
   const quickControlsEnabled = boardConnected && canRunFirmwareCommand(linkIntegrity)
-  const boardMove = useBoardMoveControl()
   const waitingForTrustedLink = boardConnected && !quickControlsEnabled
   const profilesForBoard = profilesLoadedForBoard
     ? profiles.filter(
@@ -213,19 +210,10 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
             disabled={!quickControlsEnabled}
           />
         </View>
-        <View style={styles.wideCell}>
-          <StepperWidget
-            icon={ArrowsDownUpIcon}
-            label="Move board"
-            accent={theme.palette.cyan.color}
-            disabled={!quickControlsEnabled}
-            previousAccessibilityLabel="Move board backward"
-            nextAccessibilityLabel="Move board forward"
-            onPreviousPressIn={boardMove.moveBackward}
-            onNextPressIn={boardMove.moveForward}
-            onPressOut={boardMove.stopMove}
-          />
-        </View>
+      </View>
+
+      <View style={styles.remoteTiltBox}>
+        <BoardMoveControl />
       </View>
 
       <View style={styles.legalGroup}>

@@ -594,9 +594,10 @@ Tilt enabled after leaving the screen.
 
 #### Board Move as shipped
 
-The Board Settings drawer wires Board Move as a hold-to-move stepper: holding a
-direction button streams a fixed low input (`±25` of the `-127..127` range) and
-releasing sends a neutral stop. `BoardMoveController` (both platforms) owns the
+The Board Settings drawer wires Board Move as a collapsible row: tapping it opens
+two hold buttons plus a strength stepper. Holding a direction button streams
+`±(127 × strength%)` and releasing sends a neutral stop. Strength is the
+persisted `boardMoveStrengthPercent` setting (10–100%, default 60). `BoardMoveController` (both platforms) owns the
 repeat tick — 100 ms, because both firmware generations lapse the request after
 about a second — and the wire format is picked from the linked
 `refloatBaseVersion` (`RC_MOVE` below 1.3, `REMOTE` from 1.3 up; unknown

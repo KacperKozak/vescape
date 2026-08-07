@@ -81,7 +81,7 @@ internal enum class BoardMoveGeneration {
 internal const val BOARD_MOVE_INPUT_MAX = 127
 
 /** Motor current a full-scale `RC_MOVE` request asks for, in tenths of an amp. */
-private const val RC_MOVE_CURRENT_MAX_DECIAMPS = 30
+private const val RC_MOVE_CURRENT_MAX_DECIAMPS = 60
 
 /** `RC_MOVE` runs for `time` firmware steps of ~1s; the controller re-sends before it lapses. */
 private const val RC_MOVE_TIME_STEPS = 1
