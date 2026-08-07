@@ -20,7 +20,7 @@ import { Text } from '@/components/base/Text'
 import { VescapeWordmark } from '@/components/base/VescapeWordmark'
 import { LinkWidget } from '@/components/widgets/LinkWidget'
 import { widgetSurface } from '@/components/widgets/widgetSurface'
-import { AccountWidget } from '@/modules/profile/components/AccountWidget'
+import { AccountPill } from '@/modules/profile/components/AccountPill'
 import { DASH, fmtCompactCount, fmtTimeAgo, formatBytes } from '@/helpers/format'
 import { backupProgressFraction, type BackupSlot } from '@/modules/profile/lib/backupSlot'
 import { selectAvailableUpdate } from '@/modules/release/lib/availableUpdate'
@@ -95,11 +95,10 @@ export function SettingsSheet({ backup, onNavigate }: SettingsSheetProps) {
 
   return (
     <View testID="settings-sheet" style={styles.list}>
-      <View style={styles.logo}>
+      <View style={styles.hero}>
         <VescapeWordmark width={170} />
+        <AccountPill onNavigate={onNavigate} />
       </View>
-
-      <AccountWidget onNavigate={onNavigate} />
 
       <View style={styles.strip}>
         <BackupCell backup={backup} onSignIn={() => go(routes.signIn)} />
@@ -268,9 +267,11 @@ const styles = StyleSheet.create({
   list: {
     gap: 12,
   },
-  logo: {
+  hero: {
     alignItems: 'center',
-    paddingVertical: 4,
+    gap: 12,
+    paddingTop: 4,
+    paddingBottom: 2,
   },
   dim: {
     opacity: 0.5,
