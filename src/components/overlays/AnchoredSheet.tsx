@@ -1,13 +1,4 @@
-import {
-  createContext,
-  memo,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Dimensions,
@@ -25,7 +16,6 @@ import {
   type ViewStyle,
 } from 'react-native'
 import { Text } from '@/components/base/Text'
-import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Reanimated, {
   Easing as ReanimatedEasing,
@@ -66,43 +56,6 @@ const DRAWER_OPEN_DURATION = 200
 /** Dismissal is a fast fade back toward the drawer's own edge, not a scroll home. */
 const DRAWER_CLOSE_DURATION = 170
 const DRAWER_BOTTOM_CONTENT_PADDING = 32
-
-/**
- * The drawer's backdrop: solid at the edge it opened from, thinning toward the far side. This is
- * what gives a drawer its shape — without it the screen dims uniformly and the drawer reads as a
- * flat overlay that blinks out rather than a panel hanging off an edge.
- *
- * Memoised on purpose. The canvas itself never animates; the parent animates its opacity on the UI
- * thread, so this must not be rebuilt as drawer state changes underneath it.
- */
-const DrawerVignette = memo(function DrawerVignette({
-  width,
-  height,
-  opensFromTop,
-}: {
-  width: number
-  height: number
-  opensFromTop: boolean
-}) {
-  const solid = theme.alpha(theme.palette.slate.surfaceDeep, 1)
-  const thin = theme.alpha(theme.palette.slate.surfaceDeep, 0.6)
-  const colors = opensFromTop ? [solid, solid, thin] : [thin, solid, solid]
-  const positions = opensFromTop
-    ? [0, DRAWER_INITIAL_OPEN_FRACTION, 1]
-    : [0, 1 - DRAWER_INITIAL_OPEN_FRACTION, 1]
-  return (
-    <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Rect x={0} y={0} width={width} height={height}>
-        <LinearGradient
-          start={vec(0, 0)}
-          end={vec(0, height)}
-          colors={colors}
-          positions={positions}
-        />
-      </Rect>
-    </Canvas>
-  )
-})
 
 const EdgeDrawerScrollContext = createContext<(() => void) | null>(null)
 
@@ -351,7 +304,7 @@ export function EdgeDrawer({
   children,
 }: EdgeDrawerProps) {
   const insets = useSafeAreaInsets()
-  const { width, height } = useWindowDimensions()
+  const { height } = useWindowDimensions()
   const [mounted, setMounted] = useState(false)
   const [closeRequested, setCloseRequested] = useState(false)
   const [opensFromTop, setOpensFromTop] = useState(true)
@@ -681,8 +634,7 @@ export function EdgeDrawer({
     >
       <GestureHandlerRootView style={styles.modalGestureRoot}>
         <View style={styles.drawer}>
-          <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
-            <DrawerVignette width={width} height={height} opensFromTop={opensFromTop} />
+          <Reanimated.View style={[StyleSheet.absoluteFill, styles.drawerScrim, backdropStyle]}>
             <Pressable testID={backdropTestID} style={StyleSheet.absoluteFill} onPress={close} />
           </Reanimated.View>
         </View>
@@ -807,6 +759,14 @@ const styles = StyleSheet.create({
   },
   modalGestureRoot: {
     flex: 1,
+  },
+  /**
+   * A flat translucent scrim rather than a vignette gradient. The gradient was there to fake a panel
+   * edge, but its falloff never lined up with where the drawer actually ended, and the dismissal
+   * fade is what conveys the drawer leaving.
+   */
+  drawerScrim: {
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
   },
   drawerBody: {
     paddingHorizontal: 12,
