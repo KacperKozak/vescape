@@ -37,7 +37,7 @@ concurrency:
 
 jobs:
   smoke:
-    name: Fixture-backed smoke run
+    name: Fixture session smoke run
     # Blacksmith x64 Linux runner: nested virtualisation is supported, so the emulator gets KVM.
     # 8 vCPU / 32 GB is sized for the release Gradle build (the long pole) sharing the box with an
     # emulator that wants ~4 GB to itself; the 160 GB disk also fits the SDK + NDK + Gradle caches.
