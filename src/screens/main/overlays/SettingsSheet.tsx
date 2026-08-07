@@ -25,7 +25,7 @@ import { DASH, fmtCompactCount, fmtTimeAgo, formatBytes } from '@/helpers/format
 import { backupProgressFraction, type BackupSlot } from '@/modules/profile/lib/backupSlot'
 import { selectAvailableUpdate } from '@/modules/release/lib/availableUpdate'
 import { useAppStatusStore } from '@/modules/release/store/appStatusStore'
-import { useSettingsDatabaseOps } from '@/modules/settings/hooks/useSettingsDatabaseOps'
+import { useDatabaseSize } from '@/modules/settings/hooks/useDatabaseSize'
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
 
@@ -84,7 +84,7 @@ interface SettingsSheetProps {
  * update, storage), the settings worth one tap, and one door to everything else.
  */
 export function SettingsSheet({ backup, onNavigate }: SettingsSheetProps) {
-  const db = useSettingsDatabaseOps()
+  const dbSize = useDatabaseSize().bytes
   const appStatus = useAppStatusStore((s) => s.status)
   const availableUpdate = selectAvailableUpdate(appStatus)
 
@@ -116,7 +116,7 @@ export function SettingsSheet({ backup, onNavigate }: SettingsSheetProps) {
         <StripCell
           icon={DatabaseIcon}
           accent={theme.settingsIcon.database}
-          value={db.dbSize != null ? formatBytes(db.dbSize) : DASH}
+          value={dbSize != null ? formatBytes(dbSize) : DASH}
           label="Storage"
           onPress={() => go(routes.settingsDatabase)}
           accessibilityLabel="Database and storage"

@@ -38,6 +38,7 @@ describe('fmtCompactCount', () => {
     expect(fmtCompactCount(1240)).toBe('1.2k')
     expect(fmtCompactCount(12_400)).toBe('12k')
     expect(fmtCompactCount(100_000)).toBe('100k')
+    expect(fmtCompactCount(999_999)).toBe('1.0M')
     expect(fmtCompactCount(2_500_000)).toBe('2.5M')
   })
 
