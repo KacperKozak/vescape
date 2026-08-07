@@ -198,6 +198,7 @@ internal class BoardSessionController(private val service: CoreForegroundService
         transport = {
             if (boardStatus == BoardPhase.Connected && boardConfig != null) currentBoardTransport() else null
         },
+        canMove = ::firmwareCommandsTrusted,
         generation = { BoardMoveGeneration.forBaseVersion(boardConfig?.refloatBaseVersion) },
         send = { payload, urgent -> transport.sendRemoteInput(payload, urgent) },
     )
@@ -1765,11 +1766,11 @@ private var wearAutoLaunchOnConnect = true
     fun stopRemoteTilt(): Boolean =
         firmwareCommandsTrusted() && remoteTiltController.stop()
 
-    fun startBoardMove(input: Int): Boolean =
-        firmwareCommandsTrusted() && boardMoveController.hold(input)
+    fun startBoardMove(input: Int): Boolean = boardMoveController.hold(input)
 
-    fun stopBoardMove(): Boolean =
-        firmwareCommandsTrusted() && boardMoveController.stop()
+    // Deliberately ungated: a stop must reach the board even if the link lost trust mid-hold,
+    // otherwise the rider's release does nothing and the board coasts to the firmware timeout.
+    fun stopBoardMove(): Boolean = boardMoveController.stop()
 
     fun remoteTiltState(): Map<String, Any?>? =
         remoteTiltWire(

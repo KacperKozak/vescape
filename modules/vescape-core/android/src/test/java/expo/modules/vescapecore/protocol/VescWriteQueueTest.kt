@@ -81,6 +81,30 @@ class VescWriteQueueTest {
     }
 
     @Test
+    fun routineRemoteInputNeverSwallowsAnUnsentUrgentStop() {
+        val queue = VescWriteQueue()
+        val poll = byteArrayOf(1)
+        val neutral = byteArrayOf(2)
+        val otherFeatureTick = byteArrayOf(3)
+        val newerNeutral = byteArrayOf(4)
+
+        queue.enqueueNormal(poll)
+        assertArrayEquals(poll, queue.startNext()!!.bytes)
+        queue.replaceRemoteInput(neutral, urgent = true)
+        // Remote Tilt and Board Move share this slot: a routine tick must not drop a pending stop.
+        queue.replaceRemoteInput(otherFeatureTick)
+
+        queue.completeInFlight()
+        assertArrayEquals(neutral, queue.startNext()!!.bytes)
+
+        // A newer stop still wins over an older one.
+        queue.completeInFlight()
+        queue.replaceRemoteInput(neutral, urgent = true)
+        queue.replaceRemoteInput(newerNeutral, urgent = true)
+        assertArrayEquals(newerNeutral, queue.startNext()!!.bytes)
+    }
+
+    @Test
     fun refusedRemoteInputWriteNeverOverwritesNewerTilt() {
         val queue = VescWriteQueue()
         val refused = byteArrayOf(1)

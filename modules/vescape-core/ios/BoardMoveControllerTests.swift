@@ -5,6 +5,7 @@ import XCTest
 final class BoardMoveControllerTests: XCTestCase {
   private var sent: [[UInt8]] = []
   private var transport: BoardTransport? = .direct
+  private var canMove = true
   private var generation: BoardMoveGeneration = .remote
   /// Pending repeat blocks, newest last. Mirrors Android's `TestScheduler` closely enough for a
   /// fixed-interval loop: one tick is one block.
@@ -14,6 +15,7 @@ final class BoardMoveControllerTests: XCTestCase {
     super.setUp()
     sent = []
     transport = .direct
+    canMove = true
     generation = .remote
     pending = []
   }
@@ -21,6 +23,7 @@ final class BoardMoveControllerTests: XCTestCase {
   private func makeController() -> BoardMoveController {
     BoardMoveController(
       transport: { self.transport },
+      canMove: { self.canMove },
       generation: { self.generation },
       send: { payload in
         self.sent.append(payload)
@@ -94,6 +97,23 @@ final class BoardMoveControllerTests: XCTestCase {
 
     XCTAssertFalse(makeController().hold(25))
     XCTAssertTrue(sent.isEmpty)
+  }
+
+  func testHoldIsRefusedWithoutATrustedLink() {
+    canMove = false
+
+    XCTAssertFalse(makeController().hold(25))
+    XCTAssertTrue(sent.isEmpty)
+  }
+
+  func testLosingLinkTrustMidHoldStopsWithANeutral() {
+    let controller = makeController()
+    controller.hold(25)
+    canMove = false
+
+    tick()
+    XCTAssertEqual(move(0), sent.last)
+    XCTAssertFalse(controller.isMoving)
   }
 
   func testLosingTheTransportMidHoldEndsTheStream() {

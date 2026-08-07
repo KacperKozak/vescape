@@ -19,8 +19,11 @@ private let BOARD_MOVE_REPEAT_MS = 100
 /// @platform-diff iOS has no replaceable remote-input write slot, so writes go through the plain
 /// payload path and the stop input is not prioritised ahead of queued telemetry polls.
 internal final class BoardMoveController {
-  /// Supplies the active transport only while moving is allowed; `nil` otherwise.
+  /// Supplies the active transport only while the session can talk to the board; `nil` otherwise.
   private let transport: () -> BoardTransport?
+  /// Whether move commands are allowed at all (trusted link). Re-checked every tick, so a link that
+  /// loses trust mid-hold is stopped with a neutral rather than left streaming.
+  private let canMove: () -> Bool
   /// Picks the wire format from the linked Refloat version.
   private let generation: () -> BoardMoveGeneration
   private let send: (_ payload: [UInt8]) -> Bool
@@ -31,6 +34,7 @@ internal final class BoardMoveController {
 
   init(
     transport: @escaping () -> BoardTransport?,
+    canMove: @escaping () -> Bool,
     generation: @escaping () -> BoardMoveGeneration,
     send: @escaping (_ payload: [UInt8]) -> Bool,
     schedule: @escaping (_ delayMs: Int, _ block: @escaping () -> Void) -> DispatchWorkItem = {
@@ -41,6 +45,7 @@ internal final class BoardMoveController {
     }
   ) {
     self.transport = transport
+    self.canMove = canMove
     self.generation = generation
     self.send = send
     self.schedule = schedule
@@ -56,7 +61,7 @@ internal final class BoardMoveController {
   func hold(_ input: Int) -> Bool {
     let clamped = min(max(input, -BOARD_MOVE_INPUT_MAX), BOARD_MOVE_INPUT_MAX)
     if clamped == 0 { return stop() }
-    guard let transport = transport() else { return false }
+    guard canMove(), let transport = transport() else { return false }
 
     // A running loop picks the new input up on its next tick; changing direction mid-hold must not
     // schedule an extra write.
@@ -84,6 +89,10 @@ internal final class BoardMoveController {
       guard let self else { return }
       guard let input = self.input, let transport = self.transport() else {
         self.clear()
+        return
+      }
+      guard self.canMove() else {
+        self.stop()
         return
       }
       _ = self.send(buildBoardMoveCommand(transport: transport, generation: self.generation(), input: input))

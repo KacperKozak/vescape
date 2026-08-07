@@ -28,9 +28,16 @@ internal class VescWriteQueue {
         normal.addLast(bytes)
     }
 
-    /** Replace any unsent remote input with [bytes]. */
+    /**
+     * Replace any unsent remote input with [bytes].
+     *
+     * An unsent urgent write survives: it is a neutral/stop, and Remote Tilt and Board Move share
+     * this one slot, so a routine tick from the other feature must not swallow a stop that has not
+     * reached the board yet. A newer urgent write still replaces an older one.
+     */
     @Synchronized
     fun replaceRemoteInput(bytes: ByteArray, urgent: Boolean = false) {
+        if (!urgent && pendingRemoteInput?.urgent == true) return
         pendingRemoteInput = RemoteInput(bytes, urgent)
     }
 

@@ -77,6 +77,7 @@ internal final class BoardSessionController: VescGattListener {
       guard let self, self.phase == .connected, let config = self.config else { return nil }
       return config.transport ?? .direct
     },
+    canMove: { [weak self] in self?.firmwareCommandsTrusted() ?? false },
     generation: { [weak self] in BoardMoveGeneration.forBaseVersion(self?.config?.refloatBaseVersion) },
     send: { [weak self] payload in self?.transport.sendPayload(payload) ?? false }
   )
@@ -376,12 +377,14 @@ internal final class BoardSessionController: VescGattListener {
 
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `startBoardMove`
   func startBoardMove(input: Int) -> Bool {
-    firmwareCommandsTrusted() && boardMoveController.hold(input)
+    boardMoveController.hold(input)
   }
 
+  /// Deliberately ungated: a stop must reach the board even if the link lost trust mid-hold,
+  /// otherwise the rider's release does nothing and the board coasts to the firmware timeout.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `stopBoardMove`
   func stopBoardMove() -> Bool {
-    firmwareCommandsTrusted() && boardMoveController.stop()
+    boardMoveController.stop()
   }
 
   private func firmwareCommandsTrusted() -> Bool {

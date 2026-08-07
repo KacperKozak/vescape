@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+
 import { canRunFirmwareCommand } from '@/modules/board/lib/boardLinkIntegrity'
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
@@ -24,6 +26,10 @@ export function useBoardMoveControl() {
   const setSetting = useSettingsStore((state) => state.set)
 
   const input = Math.round((BOARD_MOVE_INPUT_MAX * strengthPercent) / 100)
+
+  // The native stream outlives this screen: without this, closing the drawer (or a JS reload)
+  // mid-hold leaves the board rolling until the firmware's own ~1s timeout.
+  useEffect(() => () => void stopBoardMove(), [])
 
   return {
     boardConnected,

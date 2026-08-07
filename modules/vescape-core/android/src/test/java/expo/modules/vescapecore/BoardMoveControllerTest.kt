@@ -16,12 +16,14 @@ class BoardMoveControllerTest {
     private val sent = mutableListOf<ByteArray>()
     private val urgent = mutableListOf<Boolean>()
     private var transport: BoardTransport? = BoardTransport.Direct
+    private var canMove = true
     private var generation = BoardMoveGeneration.Remote
 
     private fun controller() =
         BoardMoveController(
             scheduler = scheduler,
             transport = { transport },
+            canMove = { canMove },
             generation = { generation },
             send = { payload, isUrgent ->
                 sent.add(payload)
@@ -95,6 +97,27 @@ class BoardMoveControllerTest {
 
         scheduler.advance(100)
         assertEquals(1, sent.size)
+        assertFalse(controller.isMoving)
+        assertEquals(0, scheduler.pendingCount)
+    }
+
+    @Test
+    fun holdIsRefusedWithoutATrustedLink() {
+        canMove = false
+
+        assertFalse(controller().hold(25))
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun losingLinkTrustMidHoldStopsWithANeutral() {
+        val controller = controller()
+        controller.hold(25)
+        canMove = false
+
+        scheduler.advance(100)
+        assertArrayEquals(move(0), sent.last())
+        assertTrue(urgent.last())
         assertFalse(controller.isMoving)
         assertEquals(0, scheduler.pendingCount)
     }

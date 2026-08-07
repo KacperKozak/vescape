@@ -26,8 +26,10 @@ private const val BOARD_MOVE_REPEAT_MS = 100L
  * state, and 1.3+ additionally holds a 2s grace after disengaging.
  *
  * @parity /modules/vescape-core/ios/BoardMoveController.swift
- * @param transport supplies the active transport only while moving is allowed;
+ * @param transport supplies the active transport only while the session can talk to the board;
  *   `null` otherwise.
+ * @param canMove whether move commands are allowed at all (trusted link). Re-checked every tick,
+ *   so a link that loses trust mid-hold is stopped with a neutral rather than left streaming.
  * @param generation picks the wire format from the linked Refloat version.
  * @param send writes a framed payload. `urgent` means the stop input, which must
  *   pass normal traffic at the next write boundary.
@@ -35,6 +37,7 @@ private const val BOARD_MOVE_REPEAT_MS = 100L
 internal class BoardMoveController(
     private val scheduler: Scheduler,
     private val transport: () -> BoardTransport?,
+    private val canMove: () -> Boolean,
     private val generation: () -> BoardMoveGeneration,
     private val send: (payload: ByteArray, urgent: Boolean) -> Boolean,
 ) {
@@ -55,6 +58,7 @@ internal class BoardMoveController(
     fun hold(input: Int): Boolean {
         val clamped = input.coerceIn(-BOARD_MOVE_INPUT_MAX, BOARD_MOVE_INPUT_MAX)
         if (clamped == 0) return stop()
+        if (!canMove()) return false
         val transport = transport() ?: return false
 
         // A running loop picks the new input up on its next tick; changing
@@ -81,6 +85,10 @@ internal class BoardMoveController(
             val transport = transport()
             if (input == null || transport == null) {
                 clear()
+                return@postDelayed
+            }
+            if (!canMove()) {
+                stop()
                 return@postDelayed
             }
             send(buildBoardMoveCommand(transport, generation(), input), false)
