@@ -52,6 +52,9 @@ const AnimatedText = Animated.createAnimatedComponent(Text)
 export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   const [tuneSelectOpen, setTuneSelectOpen] = useState(false)
   const [legalWarningOpen, setLegalWarningOpen] = useState(false)
+  // The label outlives `visible` on purpose: `FadeCardModal` keeps rendering its children through
+  // the exit animation, so clearing the name on dismiss would blank the card as it fades.
+  const [unbuiltControl, setUnbuiltControl] = useState({ label: '', visible: false })
   const [legalModeError, setLegalModeError] = useState<string | null>(null)
   const activeBoardId = useBoardStore((state) => state.activeBoardId)
   const tuneCompatibility = useBoardStore(
@@ -189,26 +192,38 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
 
       <View style={styles.quickGrid}>
         <View style={styles.quickCell}>
-          <SwitchWidget
-            icon={LightbulbIcon}
-            label="Lights"
-            size="half"
-            value={false}
-            onValueChange={() => {}}
-            accent={theme.palette.amber.color}
-            disabled={!quickControlsEnabled}
-          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Lights, not available yet"
+            onPress={() => setUnbuiltControl({ label: 'Lights', visible: true })}
+          >
+            <SwitchWidget
+              icon={LightbulbIcon}
+              label="Lights"
+              size="half"
+              value={false}
+              onValueChange={() => {}}
+              accent={theme.palette.amber.color}
+              disabled
+            />
+          </Pressable>
         </View>
         <View style={styles.quickCell}>
-          <SwitchWidget
-            icon={FootprintsIcon}
-            label="Posi"
-            size="half"
-            value={false}
-            onValueChange={() => {}}
-            accent={theme.palette.green.color}
-            disabled={!quickControlsEnabled}
-          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Posi, not available yet"
+            onPress={() => setUnbuiltControl({ label: 'Posi', visible: true })}
+          >
+            <SwitchWidget
+              icon={FootprintsIcon}
+              label="Posi"
+              size="half"
+              value={false}
+              onValueChange={() => {}}
+              accent={theme.palette.green.color}
+              disabled
+            />
+          </Pressable>
         </View>
       </View>
 
@@ -239,6 +254,13 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
         variant="warning"
         dismissLabel="Close"
         onDismiss={() => setLegalWarningOpen(false)}
+      />
+      <InfoModal
+        visible={unbuiltControl.visible}
+        title={`${unbuiltControl.label} not ready yet`}
+        message={`${unbuiltControl.label} is not wired to the board yet — the switch is here so the layout is final. It will start working in a later update.`}
+        dismissLabel="Close"
+        onDismiss={() => setUnbuiltControl((current) => ({ ...current, visible: false }))}
       />
       <InfoModal
         visible={legalModeError != null}

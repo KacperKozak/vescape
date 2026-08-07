@@ -8,7 +8,7 @@ const BOARD_MOVE_INPUT_MAX = 127
 
 export const BOARD_MOVE_STRENGTH_MIN_PERCENT = 10
 export const BOARD_MOVE_STRENGTH_MAX_PERCENT = 100
-export const BOARD_MOVE_STRENGTH_STEP_PERCENT = 5
+export const BOARD_MOVE_STRENGTH_STEP_PERCENT = 10
 
 /**
  * Hold-to-move control over the board's motor. The board only acts on it while
