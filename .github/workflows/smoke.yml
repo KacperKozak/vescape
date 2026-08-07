@@ -30,10 +30,12 @@ on:
         required: false
         type: string
 
-# Merges to `dev` can land faster than a 13-minute run, and only the tip is worth knowing about.
+# Queue rather than supersede: this is a post-merge signal, and the question it has to answer is
+# which merge broke the flows. Cancelling in favour of the tip would leave exactly the commits that
+# need a verdict without one, and the attribution has to be redone by hand.
 concurrency:
   group: smoke-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   smoke:
