@@ -53,6 +53,12 @@ internal fun validSocEstimateWindowSeconds(value: Any?): Int? =
     ?.coerceIn(0, 120)
 
 /** Max telemetry poll rate in Hz; 0 = unlimited (pure response-paced), capped at 100Hz. */
+/** Board Move strength, percent of full remote input. Floored so a stored 0 cannot mean "no move". */
+internal fun validBoardMoveStrengthPercent(value: Any?): Int? =
+  (value as? Number)
+    ?.toInt()
+    ?.coerceIn(10, 100)
+
 internal fun validTelemetryPollRateHz(value: Any?): Int? =
   (value as? Number)
     ?.toInt()
@@ -244,7 +250,7 @@ class AppDataRepository private constructor(private val context: Context) {
     val settings = AppSettings(
       liveHistoryLimit = req("liveHistoryLimit", 5, ::validLiveHistoryLimitMinutes),
       autoConnect = req("autoConnect", true) { it as? Boolean },
-      autoRecording = req("autoRecording", false) { it as? Boolean },
+      autoRecording = req("autoRecording", true) { it as? Boolean },
       selectedBoardId = opt("selectedBoardId") { it as? String },
       lastGpsLatitude = opt("lastGpsLatitude") { (it as? Number)?.toDouble() },
       lastGpsLongitude = opt("lastGpsLongitude") { (it as? Number)?.toDouble() },
@@ -263,6 +269,7 @@ class AppDataRepository private constructor(private val context: Context) {
       historyMetricGradientsEnabled = req("historyMetricGradientsEnabled", true) { it as? Boolean },
       historyMetricHotRanges = req("historyMetricHotRanges", DEFAULT_HISTORY_METRIC_HOT_RANGES, ::validHistoryMetricHotRanges),
       socEstimateWindowSeconds = req("socEstimateWindowSeconds", 20, ::validSocEstimateWindowSeconds),
+      boardMoveStrengthPercent = req("boardMoveStrengthPercent", 60, ::validBoardMoveStrengthPercent),
       connectionSoundsEnabled = req("connectionSoundsEnabled", true) { it as? Boolean },
       telemetryPollRateHz = req("telemetryPollRateHz", 20, ::validTelemetryPollRateHz),
       wearMirrorIntervalMs = req("wearMirrorIntervalMs", 500, ::validWearMirrorIntervalMs),
@@ -334,6 +341,8 @@ class AppDataRepository private constructor(private val context: Context) {
         validHistoryMetricHotRanges(value) ?: return@withContext
       "socEstimateWindowSeconds" ->
         validSocEstimateWindowSeconds(value) ?: return@withContext
+      "boardMoveStrengthPercent" ->
+        validBoardMoveStrengthPercent(value) ?: return@withContext
       "connectionSoundsEnabled" -> value as? Boolean ?: return@withContext
       "telemetryPollRateHz" ->
         validTelemetryPollRateHz(value) ?: return@withContext
@@ -385,6 +394,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "historyMetricGradientsEnabled" -> d.historyMetricGradientsEnabled
         "historyMetricHotRanges" -> d.historyMetricHotRanges
         "socEstimateWindowSeconds" -> d.socEstimateWindowSeconds
+        "boardMoveStrengthPercent" -> d.boardMoveStrengthPercent
         "connectionSoundsEnabled" -> d.connectionSoundsEnabled
         "telemetryPollRateHz" -> d.telemetryPollRateHz
         "wearMirrorIntervalMs" -> d.wearMirrorIntervalMs
@@ -730,6 +740,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "historyMetricGradientsEnabled" to historyMetricGradientsEnabled,
   "historyMetricHotRanges" to historyMetricHotRanges,
   "socEstimateWindowSeconds" to socEstimateWindowSeconds,
+  "boardMoveStrengthPercent" to boardMoveStrengthPercent,
   "connectionSoundsEnabled" to connectionSoundsEnabled,
   "telemetryPollRateHz" to telemetryPollRateHz,
   "wearMirrorIntervalMs" to wearMirrorIntervalMs,

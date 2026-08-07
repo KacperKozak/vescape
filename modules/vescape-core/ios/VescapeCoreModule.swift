@@ -76,7 +76,7 @@ public class VescapeCoreModule: Module {
 
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `Events`
     // @parity /modules/vescape-core/src/index.ts `VescapeCoreEvents`
-    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError", "onBoardWarnings", "onAppStatus", "onSyncStatus")
+    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onReplayPhoneHeading", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError", "onBoardWarnings", "onAppStatus", "onSyncStatus")
 
     // Track per-event JS listeners so native skips emitting into the void, and gate the whole
     // firehose on app foreground (see `frontendActive`). Mirrors Android's observing + lifecycle
@@ -413,12 +413,18 @@ public class VescapeCoreModule: Module {
       }
     }
 
-    AsyncFunction("startDebugReplay") { (name: String, promise: Promise) in
+    AsyncFunction("startDebugReplay") { (name: String, options: [String: Any]?, promise: Promise) in
       self.coordinator.startReplay(
         recordingName: name,
+        warmupMs: (options?["warmupMs"] as? NSNumber)?.int64Value ?? 0,
+        warmupSpeed: (options?["warmupSpeed"] as? NSNumber)?.doubleValue ?? 1.0,
         onSuccess: { promise.resolve(nil) },
         onError: { code, message in promise.reject(code, message) }
       )
+    }
+
+    Function("recordPhoneHeading") { (headingDeg: Double) in
+      self.coordinator.recordPhoneHeading(headingDeg)
     }
 
     AsyncFunction("stopDebugReplay") { (promise: Promise) in
@@ -577,6 +583,14 @@ public class VescapeCoreModule: Module {
       false
     }
 
+    AsyncFunction("startBoardMove") { (input: Int) -> Bool in
+      self.coordinator.startBoardMove(input: input)
+    }
+
+    AsyncFunction("stopBoardMove") { () -> Bool in
+      self.coordinator.stopBoardMove()
+    }
+
     // MARK: - Tune Profiles (#161)
     // DB-backed per-board VESC tune configs with Tune History, matching Android 1:1. `TuneProfileStore`
     // owns the transactional semantics; mutations reject with Android's error vocabulary.
@@ -706,7 +720,7 @@ public class VescapeCoreModule: Module {
       do {
         promise.resolve(try TelemetryRepository.shared.importFavoriteMedia(options))
       } catch {
-        promise.reject("ERR_IMPORT_FAVORITE_MEDIA", "favorite media could not be imported", error)
+        promise.reject("ERR_IMPORT_FAVORITE_MEDIA", error.localizedDescription)
       }
     }
 

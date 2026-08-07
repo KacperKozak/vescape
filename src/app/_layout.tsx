@@ -18,10 +18,12 @@ import { Text } from '@/components/base/Text'
 import { DiagnosticErrorBoundary } from '@/modules/diagnostics/DiagnosticErrorBoundary'
 import { HeaderBackButton } from '@/components/base/HeaderBackButton'
 import { isDevelopmentApp } from '@/config/appVariant'
+import { showDevControls } from '@/config/env'
 import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
 import { startAlertsBoardSync } from '@/bootstrap/alertsBoardSync'
 import { startAppDataSync } from '@/bootstrap/appDataSync'
+import { useSessionFixtures } from '@/bootstrap/sessionFixtures'
 import { startBoardWarningsSync } from '@/modules/board/store/boardWarningsStore'
 import { startSyncStatusSync } from '@/modules/profile/store/syncStatusStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
@@ -42,7 +44,7 @@ function requireClerkPublishableKey(): string {
 
 function DevelopmentBadge() {
   const insets = useSafeAreaInsets()
-  if (!isDevelopmentApp) return null
+  if (!isDevelopmentApp || !showDevControls) return null
 
   return (
     <View
@@ -103,13 +105,22 @@ function RootLayout() {
     'Raleway-700': require('../../assets/fonts/Raleway-700.ttf'),
     'Raleway-800': require('../../assets/fonts/Raleway-800.ttf'),
     'Raleway-900': require('../../assets/fonts/Raleway-900.ttf'),
+    'JetBrainsMono-500': require('../../assets/fonts/JetBrainsMono-500.ttf'),
+    'JetBrainsMono-600': require('../../assets/fonts/JetBrainsMono-600.ttf'),
+    'JetBrainsMono-700': require('../../assets/fonts/JetBrainsMono-700.ttf'),
+    'JetBrainsMono-800': require('../../assets/fonts/JetBrainsMono-800.ttf'),
   })
 
   useEffect(() => {
     if (fontsLoaded || fontError) void SplashScreen.hideAsync()
   }, [fontsLoaded, fontError])
 
+  // A fixture build (screenshots, smoke) restores a database before anything reads it; every other
+  // build is ready on the first render.
+  const fixturesReady = useSessionFixtures()
+
   useEffect(() => {
+    if (!fixturesReady) return
     void useSettingsStore.getState().load()
     void useRiderStore.getState().load()
     useGroupRideStore.getState().startObserving()
@@ -126,11 +137,12 @@ function RootLayout() {
       stopAppStatusSync()
       stopSyncStatusSync()
     }
-  }, [])
+  }, [fixturesReady])
 
   // Hold the splash until Raleway is ready (or fails to load). Returning null
   // keeps the native splash up without an unmount/mount churn.
   if (!fontsLoaded && !fontError) return null
+  if (!fixturesReady) return null
 
   return (
     <ClerkProvider
@@ -211,6 +223,10 @@ function RootLayout() {
             <Stack.Screen
               name={stackScreens.settingsReleaseNotes}
               options={{ title: 'Release notes' }}
+            />
+            <Stack.Screen
+              name={stackScreens.devMapPlayground}
+              options={{ title: 'Camera playground' }}
             />
             <Stack.Screen name={stackScreens.controlBatteryRaw} options={{ title: 'Raw BMS' }} />
             <Stack.Screen name={stackScreens.tune} options={{ title: 'Tune' }} />

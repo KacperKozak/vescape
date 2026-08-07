@@ -25,6 +25,7 @@ const BASE: AppSettings = {
   historyMetricGradientsEnabled: true,
   historyMetricHotRanges: { battery: { start: 0, end: 1 } },
   socEstimateWindowSeconds: 20,
+  boardMoveStrengthPercent: 60,
   connectionSoundsEnabled: true,
   companionPresenceEnabled: false,
   boardWarningsEnabled: true,

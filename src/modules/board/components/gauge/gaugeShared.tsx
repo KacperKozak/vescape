@@ -1,6 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
-import { TextInput, type LayoutChangeEvent } from 'react-native'
-import Animated, { interpolateColor } from 'react-native-reanimated'
+import { useMemo } from 'react'
+import { interpolateColor, type DerivedValue, type SharedValue } from 'react-native-reanimated'
 import {
   Path,
   RadialGradient,
@@ -10,8 +9,10 @@ import {
   type SkFont,
 } from '@shopify/react-native-skia'
 
+import { MonoText, TEXT_LINE_RATIO } from '@/components/base/MonoValue'
 import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
 import { theme, type AlphaLevel } from '@/constants/theme'
+import { useSkiaFont } from '@/hooks/useSkiaFont'
 import { type MetricHotRange } from '@/modules/history/lib/metricColorScale'
 import {
   clamp01,
@@ -22,8 +23,6 @@ import {
   STROKE,
   type Arc,
 } from '@/modules/board/components/gauge/arcGeometry'
-
-export const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
 export const BG_ARC_COLOR = theme.palette.slate.border
 const GAUGE_HOT_COLOR = theme.status.error.color
@@ -155,12 +154,76 @@ export function AlertMarker({ arc, alert, min = 0, max, labelFont = null }: Aler
   )
 }
 
-/** Measured size of a gauge canvas host view, for viewBox → pixel scaling. */
-export function useCanvasSize() {
-  const [size, setSize] = useState({ w: 0, h: 0 })
-  const onLayout = useCallback((e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout
-    setSize((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }))
-  }, [])
-  return { size, onLayout }
+// ── Numeric readout ──────────────────────────────────────────────────────────
+
+/** Gap between the value line and the unit caption under it. */
+const UNIT_GAP = 2
+
+export interface GaugeReadoutBox {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+interface GaugeReadoutProps {
+  text: DerivedValue<string>
+  color: SharedValue<string> | string
+  unit: string
+  /** Bowl the value + unit stack is centered in, in canvas pixels. */
+  box: GaugeReadoutBox
+  valueSize: number
+  valueLineHeight: number
+  unitSize: number
+}
+
+/**
+ * Value + unit drawn inside the gauge's own canvas. Both used to be RN views
+ * layered over the arc, which cost a second native surface per gauge.
+ */
+export function GaugeReadout({
+  text,
+  color,
+  unit,
+  box,
+  valueSize,
+  valueLineHeight,
+  unitSize,
+}: GaugeReadoutProps) {
+  const unitFont = useSkiaFont('500', unitSize)
+  const unitLineHeight = Math.ceil(unitSize * TEXT_LINE_RATIO)
+  const top = box.y + (box.height - (valueLineHeight + UNIT_GAP + unitLineHeight)) / 2
+
+  const unitOrigin = useMemo(() => {
+    if (!unitFont) return null
+    const { ascent, descent } = unitFont.getMetrics()
+    return {
+      x: box.x + (box.width - unitFont.getTextWidth(unit)) / 2,
+      y: top + valueLineHeight + UNIT_GAP + unitLineHeight / 2 - (ascent + descent) / 2,
+    }
+  }, [unitFont, unit, box.x, box.width, top, valueLineHeight, unitLineHeight])
+
+  return (
+    <>
+      <MonoText
+        text={text}
+        size={valueSize}
+        color={color}
+        align="center"
+        x={box.x}
+        y={top}
+        width={box.width}
+        height={valueLineHeight}
+      />
+      {unitOrigin && unitFont ? (
+        <SkiaText
+          x={unitOrigin.x}
+          y={unitOrigin.y}
+          text={unit}
+          font={unitFont}
+          color={theme.palette.slate.textMuted}
+        />
+      ) : null}
+    </>
+  )
 }

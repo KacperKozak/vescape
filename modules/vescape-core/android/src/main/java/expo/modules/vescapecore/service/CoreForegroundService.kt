@@ -66,6 +66,14 @@ data class SessionConfig(
      * `recordingEnabled = false` and `autoReconnect = false`.
      */
     val replayRecordingName: String? = null,
+    /**
+     * How much of the recording plays faster than real time before playback settles to 1×, and how
+     * much faster. `0` — the default and what the dev Replay UI uses — is a plain 1× replay.
+     *
+     * @see expo.modules.vescapecore.replay.ReplayClock
+     */
+    val replayWarmupMs: Long = 0L,
+    val replayWarmupSpeed: Double = 1.0,
 )
 
 internal data class PendingStart(
@@ -143,12 +151,19 @@ class CoreForegroundService : Service() {
         }
 
         fun stopBoardSession(context: Context, onSuccess: () -> Unit = {}) {
+            val service = instance
+            if (service == null) {
+                // No service, no session: settle the promise instead of reviving it just to stop.
+                pendingStop = null
+                onSuccess()
+                return
+            }
             pendingStop = PendingStop(onSuccess)
             val intent = Intent(context, CoreForegroundService::class.java).apply {
                 action = ACTION_STOP_SESSION
             }
             context.startService(intent)
-            instance?.controller?.consumePendingStop()
+            service.controller.consumePendingStop()
         }
 
         fun exitApp(context: Context) {
@@ -211,6 +226,10 @@ class CoreForegroundService : Service() {
 
         fun stopRemoteTilt(): Boolean = instance?.controller?.stopRemoteTilt() ?: false
 
+        fun startBoardMove(input: Int): Boolean = instance?.controller?.startBoardMove(input) ?: false
+
+        fun stopBoardMove(): Boolean = instance?.controller?.stopBoardMove() ?: false
+
         fun pushProfileToBoard(
             context: Context,
             profileId: String,
@@ -241,13 +260,22 @@ class CoreForegroundService : Service() {
             instance?.controller?.consumePendingGpsStart()
         }
 
+        /**
+         * Stopping something that is not running must not *create* the service. A start intent
+         * revives a dead service, and a revived service whose only work is a stop goes straight
+         * back to `stopSelf()` — if Android was still waiting on a `startForeground()` from an
+         * overlapping foreground start, that teardown kills the process with
+         * ForegroundServiceDidNotStartInTimeException. No instance ⇒ no GPS monitoring ⇒ nothing
+         * to stop.
+         */
         fun stopGpsMonitoring(context: Context) {
             pendingGpsStart = false
+            val service = instance ?: return
             val intent = Intent(context, CoreForegroundService::class.java).apply {
                 action = ACTION_STOP_GPS_MONITORING
             }
             context.startService(intent)
-            instance?.controller?.stopGpsMonitoring()
+            service.controller.stopGpsMonitoring()
         }
 
         fun startGroupRideObserve(context: Context, url: String) {
@@ -264,11 +292,12 @@ class CoreForegroundService : Service() {
 
         fun stopGroupRideObserve(context: Context) {
             pendingGroupRideUrl = null
+            val service = instance ?: return
             val intent = Intent(context, CoreForegroundService::class.java).apply {
                 action = ACTION_STOP_GROUP_RIDE_OBSERVE
             }
             context.startService(intent)
-            instance?.controller?.stopGroupRideObserve()
+            service.controller.stopGroupRideObserve()
         }
 
         /** Create a Group Ride over the live observe socket. No-op when the service is not running. */
@@ -305,6 +334,16 @@ class CoreForegroundService : Service() {
             riderColor: String?,
         ) {
             instance?.controller?.updateGroupRideIdentity(riderId, riderName, riderColor)
+        }
+
+        /**
+         * Offer a compass reading to whatever Debug Recording is running. No service, no session or
+         * no active recorder means it is simply dropped — JS pushes these unconditionally while the
+         * map's heading layer is live, and native is the one that knows whether anything is
+         * recording.
+         */
+        fun recordPhoneHeading(context: Context, headingDeg: Double) {
+            instance?.controller?.recordPhoneHeading(headingDeg)
         }
 
         fun setTelemetryRecordingEnabled(context: Context, enabled: Boolean) {

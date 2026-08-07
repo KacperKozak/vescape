@@ -24,8 +24,8 @@ internal-build, Internal status/resume, open-promotion, and production actions.
 Status/resume discovers recent GitHub workflow runs, then shows the live job, step, elapsed time, and
 estimated remaining range; it does not depend on terminal-local state. Open promotion selects one
 successful internal manifest and promotes the manifest's exact existing codes. Canonical rider-facing
-notes are bundled by release train from `release-notes/<major>.<minor>.md`; internal builds and open
-promotion tolerate a missing current-train file. Open promotion never rebuilds or uploads an AAB.
+notes are bundled per marketing version from `release-notes/<major>.<minor>.<patch>.md`; internal
+builds and open promotion tolerate a missing file for the current version. Open promotion never rebuilds or uploads an AAB.
 Track IDs come from the `PLAY_PHONE_INTERNAL_TRACK`, `PLAY_PHONE_OPEN_TRACK`,
 `PLAY_WEAR_INTERNAL_TRACK`, and `PLAY_WEAR_OPEN_TRACK` repository variables. Production targets use
 `PLAY_PHONE_PRODUCTION_TRACK` and `PLAY_WEAR_PRODUCTION_TRACK`. Defaults are `internal`, `beta`,

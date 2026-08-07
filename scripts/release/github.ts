@@ -10,9 +10,10 @@ import type {
   WorkflowRun,
 } from './contracts'
 import { parseProductionManifest, parsePromotionManifest, parseReleaseManifest } from './contracts'
-import { releaseTrainNotesPath } from './prepare'
+import { releaseNotesPath } from './prepare'
 
 const WORKFLOW_FILE = 'release-android.yml'
+const IOS_WORKFLOW_FILE = 'release-ios.yml'
 const PROMOTION_WORKFLOW_FILE = 'promote-open.yml'
 const PRODUCTION_WORKFLOW_FILE = 'promote-production.yml'
 
@@ -220,7 +221,8 @@ export async function repositoryDefaultBranch(repo: string): Promise<string> {
   return value
 }
 
-export async function resolveSourceSha(ref: string): Promise<string> {
+export async function resolveSourceSha(input: string): Promise<string> {
+  const ref = input.trim()
   const process = Bun.spawn(['git', 'rev-parse', '--verify', `${ref}^{commit}`], {
     stdout: 'pipe',
     stderr: 'pipe',
@@ -256,13 +258,18 @@ export async function marketingVersion(repo: string, sourceSha: string): Promise
   return packageJson.version
 }
 
-export async function dispatchInternalBuild(repo: string, payload: DispatchPayload): Promise<void> {
+async function dispatchBuildWorkflow(
+  repo: string,
+  workflowFile: string,
+  payload: DispatchPayload,
+  label: string,
+): Promise<void> {
   await checkedGh(
     [
       'api',
       '--method',
       'POST',
-      `repos/${repo}/actions/workflows/${WORKFLOW_FILE}/dispatches`,
+      `repos/${repo}/actions/workflows/${workflowFile}/dispatches`,
       '--raw-field',
       `ref=${payload.ref}`,
       '--raw-field',
@@ -270,8 +277,19 @@ export async function dispatchInternalBuild(repo: string, payload: DispatchPaylo
       '--raw-field',
       `inputs[request_id]=${payload.inputs.request_id}`,
     ],
-    'Workflow dispatch failed',
+    label,
   )
+}
+
+export async function dispatchInternalBuild(repo: string, payload: DispatchPayload): Promise<void> {
+  await dispatchBuildWorkflow(repo, WORKFLOW_FILE, payload, 'Workflow dispatch failed')
+}
+
+export async function dispatchIosInternalBuild(
+  repo: string,
+  payload: DispatchPayload,
+): Promise<void> {
+  await dispatchBuildWorkflow(repo, IOS_WORKFLOW_FILE, payload, 'iOS workflow dispatch failed')
 }
 
 export async function dispatchOpenPromotion(
@@ -316,11 +334,10 @@ export async function dispatchProduction(
   )
 }
 
-export function parseWorkflowRuns(value: unknown, requestId: string): WorkflowRun | null {
+function parseRunsByTitle(value: unknown, title: string): WorkflowRun | null {
   if (!value || typeof value !== 'object') throw new Error('Workflow runs response is invalid')
   const runs = (value as { workflow_runs?: unknown }).workflow_runs
   if (!Array.isArray(runs)) throw new Error('Workflow runs response has no workflow_runs')
-  const title = `Internal ${requestId}`
   const match = runs.find(
     (run): run is WorkflowRun =>
       !!run &&
@@ -329,6 +346,14 @@ export function parseWorkflowRuns(value: unknown, requestId: string): WorkflowRu
       typeof (run as WorkflowRun).id === 'number',
   )
   return match ?? null
+}
+
+export function parseWorkflowRuns(value: unknown, requestId: string): WorkflowRun | null {
+  return parseRunsByTitle(value, `Internal ${requestId}`)
+}
+
+export function parseIosWorkflowRuns(value: unknown, requestId: string): WorkflowRun | null {
+  return parseRunsByTitle(value, `iOS ${requestId}`)
 }
 
 export function parsePromotionWorkflowRuns(value: unknown, requestId: string): WorkflowRun | null {
@@ -375,6 +400,20 @@ export async function findDispatchedRun(
     'Cannot list workflow runs',
   )
   return parseWorkflowRuns(JSON.parse(output), requestId)
+}
+
+export async function findDispatchedIosRun(
+  repo: string,
+  requestId: string,
+): Promise<WorkflowRun | null> {
+  const output = await checkedGh(
+    [
+      'api',
+      `repos/${repo}/actions/workflows/${IOS_WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=50`,
+    ],
+    'Cannot list iOS workflow runs',
+  )
+  return parseIosWorkflowRuns(JSON.parse(output), requestId)
 }
 
 export async function findPromotionRun(
@@ -736,12 +775,11 @@ export async function canonicalNotesPath(
   marketingVersion: string,
   ref = 'main',
 ): Promise<string> {
-  const path = releaseTrainNotesPath(marketingVersion)
-  const train = path.slice('release-notes/'.length, -'.md'.length)
+  const path = releaseNotesPath(marketingVersion)
   await checkedGh(
     [
       'api',
-      `repos/${repo}/contents/release-notes/${encodeURIComponent(train)}.md?ref=${encodeURIComponent(ref)}`,
+      `repos/${repo}/contents/release-notes/${encodeURIComponent(marketingVersion)}.md?ref=${encodeURIComponent(ref)}`,
       '--silent',
     ],
     `Canonical release notes missing at ${path} on ${ref}`,
@@ -776,44 +814,6 @@ export async function listPrereleaseTags(repo: string, limit = 20): Promise<stri
   return parseReleases(JSON.parse(output))
     .filter((release) => release.isPrerelease)
     .map((release) => release.tagName)
-}
-
-export function trainFreezeWarning(
-  notesPath: string,
-  firstProductionTag: string,
-  firstProductionAt: number,
-  notesModifiedAt: number,
-): string | null {
-  if (notesModifiedAt <= firstProductionAt) return null
-  return `${notesPath} changed after ${firstProductionTag} reached production; train is frozen. Put late release notes in next train.`
-}
-
-export async function releaseTrainFreezeWarning(marketingVersion: string): Promise<string | null> {
-  const notesPath = releaseTrainNotesPath(marketingVersion)
-  const train = notesPath.slice('release-notes/'.length, -'.md'.length)
-  await checkedGit(['fetch', 'origin', 'main', '--tags'], 'Cannot refresh release train history')
-  const tags = await checkedGit(
-    [
-      'for-each-ref',
-      '--sort=creatordate',
-      '--format=%(refname:short) %(creatordate:unix)',
-      `refs/tags/v${train}.*`,
-    ],
-    `Cannot inspect production tags for train ${train}`,
-  )
-  const first = tags.split('\n').find((line) => line.length > 0)
-  if (!first) return null
-  const match = /^(v\S+) (\d+)$/.exec(first)
-  if (!match) throw new Error(`Invalid production tag metadata "${first}"`)
-  const notesModifiedAt = Number(
-    await checkedGit(
-      ['log', '-1', '--format=%ct', 'origin/main', '--', notesPath],
-      `Cannot inspect history for ${notesPath}`,
-    ),
-  )
-  if (!Number.isSafeInteger(notesModifiedAt) || notesModifiedAt < 1)
-    throw new Error(`Cannot find history for ${notesPath}`)
-  return trainFreezeWarning(notesPath, match[1], Number(match[2]), notesModifiedAt)
 }
 
 export async function downloadPromotionManifest(runId: number): Promise<PromotionManifest> {

@@ -12,7 +12,7 @@ const config: ExpoConfig = {
   scheme: 'vescape',
   userInterfaceStyle: 'automatic',
   ios: {
-    supportsTablet: true,
+    supportsTablet: false,
     bundleIdentifier: applicationId,
     // Required by @bacons/apple-targets to sign the ride-activity widget extension. Account-specific
     // 10-char Apple Developer team ID — set APPLE_TEAM_ID at prebuild/build time (EAS secret / .env).

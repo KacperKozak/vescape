@@ -33,8 +33,11 @@ prebuild (`withWearMirror`). No manual `rm -rf android/wearos && cp -R`.
 ## Known Devices
 
 - Watch: OnePlus Watch 3 / `OPWWE231`.
-- Phone package and watch package both: `app.vescape`.
-- Watch activity: `app.vescape/.wear.MainActivity`.
+- Phone package and watch package match, including the Expo profile suffix: dev prebuild installs
+  `app.vescape.dev`, store build is `app.vescape`. Both can sit on the watch at once, two icons.
+- Watch activity class is always `app.vescape.wear.MainActivity`, so the component is
+  `<applicationId>/app.vescape.wear.MainActivity`. `wear:install` reads the applicationId back from
+  the generated `android/wearos/build.gradle` — do not hardcode `app.vescape`.
 - Watch often appears twice via mDNS. Script picks the first watch and says so.
 
 ## Why the re-sign

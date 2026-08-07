@@ -14,14 +14,12 @@ const DUTY_MAX = 100
 interface DualGaugeIndicatorProps {
   compact?: boolean
   transparent?: boolean
-  split?: boolean
   containerStyle?: StyleProp<ViewStyle>
 }
 
 export function DualGaugeIndicator({
   compact,
   transparent,
-  split,
   containerStyle,
 }: DualGaugeIndicatorProps) {
   const speedSeries = useLiveSeries('speed')
@@ -72,7 +70,6 @@ export function DualGaugeIndicator({
       dutyAlerts={dutyAlerts}
       compact={compact}
       transparent={transparent}
-      split={split}
       containerStyle={containerStyle}
     />
   )

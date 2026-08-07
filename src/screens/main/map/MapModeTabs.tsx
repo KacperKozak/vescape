@@ -71,6 +71,7 @@ export function MapModeTabs({
       >
         <PillSelectorItem
           id="map"
+          testID="map-mode-explore"
           label="Explore"
           icon={MapTrifoldIcon}
           activeLabelOnly
@@ -82,6 +83,7 @@ export function MapModeTabs({
         />
         <PillSelectorItem
           id="weather"
+          testID="map-mode-weather"
           label="Weather"
           icon={WeatherModeIcon}
           activeLabelOnly
@@ -101,6 +103,7 @@ export function MapModeTabs({
         />
         <PillSelectorItem
           id="legalLimits"
+          testID="map-mode-legal-limits"
           label="Legal limits"
           icon={SpeedometerIcon}
           activeLabelOnly

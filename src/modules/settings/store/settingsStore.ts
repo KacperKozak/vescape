@@ -16,7 +16,7 @@ import {
 const DEFAULTS: AppSettings = {
   liveHistoryLimit: 5,
   autoConnect: true,
-  autoRecording: false,
+  autoRecording: true,
   selectedBoardId: null,
   lastGpsLatitude: null,
   lastGpsLongitude: null,
@@ -35,6 +35,7 @@ const DEFAULTS: AppSettings = {
   historyMetricGradientsEnabled: true,
   historyMetricHotRanges: DEFAULT_HISTORY_METRIC_HOT_RANGES,
   socEstimateWindowSeconds: 20,
+  boardMoveStrengthPercent: 60,
   connectionSoundsEnabled: true,
   companionPresenceEnabled: false,
   boardWarningsEnabled: true,

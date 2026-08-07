@@ -249,12 +249,24 @@ An app-detected abnormal Board condition worth the rider's attention — such as
 _Avoid_: Board alert (collides with Alert Rule), fault (reserved for VESC firmware fault codes), board issue, health event
 
 **Debug Recording**:
-A developer-facing `.jsonl` capture of one Board Session's raw BLE traffic, session-state transitions, and GPS fixes, recorded on-device and exportable for offline analysis or detector replay. Not a **Ride Recording** (no telemetry-sample persistence, not rider-facing) and not part of **Ride History**.
+A developer-facing `.jsonl` capture of one Board Session — raw BLE traffic, session-state transitions, GPS fixes, and phone sensor readings the board never sees (compass heading) — plus a `meta` header describing the board it was recorded from. Recorded on-device and exportable for offline analysis or detector replay. Replaying one drives a real session through the transport seam, and the recording owns that session's position, heading and time for its whole duration. Not a **Ride Recording** (no telemetry-sample persistence, not rider-facing) and not part of **Ride History**.
 _Avoid_: session log, BLE dump, trace
+
+**Session Clock**:
+The source of "now" for one **Board Session**. Every timestamp the session stamps onto data it produces, and every comparison against those timestamps, reads it instead of the system clock. A real session's Session Clock is wall time; a replay's can run ahead of real time (see **Replay Speed**). The rule is all-or-nothing — mixing wall time and session time inside one session produces data that disagrees with the code reading it — with one carve-out: throttles that guard a resource rather than describe the ride stay on wall time.
+_Avoid_: virtual clock, fake time, clock offset
+
+**Replay Speed**:
+How fast a replay's **Session Clock** runs against real time. `1×` — the default, and what the Replay UI uses — reproduces a ride exactly as it happened. A caller may instead ask for a warmup: an opening stretch of the recording delivered faster, so the session comes up with its live charts already filled instead of spending real minutes earning them. Playback drops to 1× once the warmup window has elapsed.
+_Avoid_: fast-forward, playback rate, time scale
 
 **App Setting**:
 A user-controlled app preference that affects app behavior across boards unless explicitly scoped elsewhere.
 _Avoid_: Option, config
+
+**Settings Drawer**:
+The edge drawer behind the top-right button on the main screen: the **Vescape Account**, the app's live self-status (backup, version, storage), the few settings worth one tap, and one link to Advanced settings for everything else. Its button wears whatever inside it needs attention — a required update, or a running backup with its progress — the way the Social button wears an active **Group Ride**.
+_Avoid_: settings menu, settings popover, quick settings
 
 **Board Setting**:
 A rider-adjustable preference or soft state scoped to one **Board**, stored schemalessly per Board (key-value). Distinct from Board identity and probe-confirmed facts (name, **Board Link**), which are structured Board fields. Examples: battery configuration, **Alert Preset** levels, **Board Top Speed**.

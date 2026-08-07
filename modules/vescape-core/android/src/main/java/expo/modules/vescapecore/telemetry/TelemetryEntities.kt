@@ -655,7 +655,7 @@ internal val NOT_SYNCED_SETTING_KEYS = setOf(
 data class AppSettings(
   val liveHistoryLimit: Int = 5,
   val autoConnect: Boolean = true,
-  val autoRecording: Boolean = false,
+  val autoRecording: Boolean = true,
   val selectedBoardId: String? = null,
   val lastGpsLatitude: Double? = null,
   val lastGpsLongitude: Double? = null,
@@ -674,6 +674,7 @@ data class AppSettings(
   val historyMetricGradientsEnabled: Boolean = true,
   val historyMetricHotRanges: Map<String, Map<String, Double>> = DEFAULT_HISTORY_METRIC_HOT_RANGES,
   val socEstimateWindowSeconds: Int = 20,
+  val boardMoveStrengthPercent: Int = 60,
   val connectionSoundsEnabled: Boolean = true,
   val telemetryPollRateHz: Int = 20,
   val wearMirrorIntervalMs: Int = 500,

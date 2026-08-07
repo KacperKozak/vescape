@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react'
+import { forwardRef, useRef, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import {
   ArrowFatLinesUpIcon,
   BroadcastIcon,
+  ArrowsClockwiseIcon,
   CaretDownIcon,
   GearSixIcon,
   PencilSimpleIcon,
@@ -18,19 +19,22 @@ import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
 import { IconButton } from '@/components/base/IconButton'
 import { WeatherStat } from '@/modules/weather/components/WeatherStat'
 import { SocialSheet } from '@/modules/group-ride/components/SocialSheet'
-import { AccountWidget } from '@/modules/profile/components/AccountWidget'
+import { SettingsSheet } from '@/screens/main/overlays/SettingsSheet'
 import { BoardWarningControl } from '@/modules/board/components/BoardWarningControl'
 import { ReplayBadge } from '@/modules/board/components/ReplayBadge'
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { isReplayBoardId } from 'vescape-core'
 import { isNightAtTime } from '@/modules/weather/lib/weather'
 import { routes } from '@/navigation/routes'
+import { showDevControls } from '@/config/env'
 import type { Board } from '@/modules/board/store/boardStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
 import { theme } from '@/constants/theme'
 import { selectAvailableUpdate } from '@/modules/release/lib/availableUpdate'
+import { settingsTriggerState } from '@/screens/main/overlays/settingsTrigger'
 import { useAppStatusStore } from '@/modules/release/store/appStatusStore'
+import { useBackupSlot } from '@/modules/profile/hooks/useBackupSlot'
 
 interface TopBarProps {
   boards: Board[]
@@ -42,6 +46,82 @@ interface TopBarProps {
   onDisconnect: () => void
   onWeatherPress?: () => void
 }
+
+interface BoardPillProps {
+  activeBoardId: string | null
+  activeBoard: Board | undefined
+  bleStatus: string
+  isReplay: boolean
+  onOpenSelector: () => void
+  onDisconnect: () => void
+}
+
+/** The board identity pill: selector, edit, disconnect and the Board Warning control. */
+const BoardPill = forwardRef<View, BoardPillProps>(function BoardPill(
+  { activeBoardId, activeBoard, bleStatus, isReplay, onOpenSelector, onDisconnect },
+  ref,
+) {
+  const canDisconnect =
+    bleStatus === 'connected' ||
+    bleStatus === 'stale' ||
+    bleStatus === 'reconnecting' ||
+    bleStatus === 'rescanning' ||
+    bleStatus === 'waiting_for_telemetry'
+  const name = activeBoard?.name ?? 'No board'
+  const statusColor =
+    bleStatus === 'connected'
+      ? theme.palette.green.color
+      : bleStatus === 'error'
+        ? theme.status.error.color
+        : theme.palette.slate.textSecondary
+
+  return (
+    <View ref={ref} style={styles.pill}>
+      <Pressable
+        style={styles.boardButton}
+        onPress={onOpenSelector}
+        testID="board-selector-trigger"
+        accessibilityLabel="Board selector"
+      >
+        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+        {isReplay && showDevControls && <ReplayBadge />}
+        <Text style={styles.boardText} numberOfLines={1}>
+          {name}
+        </Text>
+        <CaretDownIcon size={12} color={theme.palette.slate.textSecondary} weight="bold" />
+      </Pressable>
+      <View style={styles.divider} />
+      <Pressable
+        style={[styles.plugButton, !activeBoard && styles.iconRoundDisabled]}
+        disabled={!activeBoard}
+        onPress={() => {
+          if (!activeBoard) return
+          router.push({ pathname: routes.editBoard, params: { boardId: activeBoard.id } })
+        }}
+        testID="board-edit-button"
+      >
+        <PencilSimpleIcon
+          size={14}
+          color={activeBoard ? theme.palette.slate.textPrimary : theme.palette.slate.textMuted}
+          weight="bold"
+        />
+      </Pressable>
+      {canDisconnect && (
+        <>
+          <View style={styles.divider} />
+          <Pressable
+            style={styles.plugButton}
+            onPress={onDisconnect}
+            testID="board-disconnect-button"
+          >
+            <PowerIcon size={15} color={theme.status.error.color} weight="bold" />
+          </Pressable>
+        </>
+      )}
+      {activeBoardId && <BoardWarningControl boardId={activeBoardId} />}
+    </View>
+  )
+})
 
 export function TopBar({
   boards,
@@ -58,6 +138,8 @@ export function TopBar({
   const socialRef = useRef<View>(null)
   const [selectorOpen, setSelectorOpen] = useState(false)
   const [socialOpen, setSocialOpen] = useState(false)
+  const settingsRef = useRef<View>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const isReplay = useBleStore((s) => isReplayBoardId(s.connectedId))
   const nearbyBadge = useGroupRideStore((s) => s.badge)
@@ -70,25 +152,17 @@ export function TopBar({
   // A Release Policy warning escalates the gear itself; a merely newer version stays a quiet dot.
   const versionWarning =
     appStatus?.version.status === 'update-warning' || appStatus?.version.status === 'online-blocked'
+  const backup = useBackupSlot()
+  const trigger = settingsTriggerState({
+    versionWarning,
+    updateAvailable: availableUpdate !== null,
+    backup,
+  })
   const sunrise = useWeatherStore((s) => s.sunrise)
   const sunset = useWeatherStore((s) => s.sunset)
   const hasWeather = weatherCode != null && weatherTemp != null
   const now = new Date()
   const isNight = isNightAtTime(now.getHours(), now.getMinutes(), sunrise, sunset)
-
-  const canDisconnect =
-    bleStatus === 'connected' ||
-    bleStatus === 'stale' ||
-    bleStatus === 'reconnecting' ||
-    bleStatus === 'rescanning' ||
-    bleStatus === 'waiting_for_telemetry'
-  const name = activeBoard?.name ?? 'No board'
-  const statusColor =
-    bleStatus === 'connected'
-      ? theme.palette.green.color
-      : bleStatus === 'error'
-        ? theme.status.error.color
-        : theme.palette.slate.textSecondary
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
@@ -98,66 +172,41 @@ export function TopBar({
             icon={rideActive ? BroadcastIcon : UsersThreeIcon}
             onPress={() => setSocialOpen(true)}
             accessibilityLabel="Social"
+            testID="social-drawer-trigger"
             dot={nearbyBadge && !rideActive ? theme.palette.groupRide.color : undefined}
             accent={rideActive ? theme.palette.groupRide.color : undefined}
           />
         </View>
-        <View ref={pillRef} style={styles.pill}>
-          <Pressable
-            style={styles.boardButton}
-            onPress={() => setSelectorOpen(true)}
-            testID="board-selector-trigger"
-            accessibilityLabel="Board selector"
-          >
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            {isReplay && <ReplayBadge />}
-            <Text style={styles.boardText} numberOfLines={1}>
-              {name}
-            </Text>
-            <CaretDownIcon size={12} color={theme.palette.slate.textSecondary} weight="bold" />
-          </Pressable>
-          <View style={styles.divider} />
-          <Pressable
-            style={[styles.plugButton, !activeBoard && styles.iconRoundDisabled]}
-            disabled={!activeBoard}
-            onPress={() => {
-              if (!activeBoard) return
-              router.push({ pathname: routes.editBoard, params: { boardId: activeBoard.id } })
-            }}
-            testID="board-edit-button"
-          >
-            <PencilSimpleIcon
-              size={14}
-              color={activeBoard ? theme.palette.slate.textPrimary : theme.palette.slate.textMuted}
-              weight="bold"
-            />
-          </Pressable>
-          {canDisconnect && (
-            <>
-              <View style={styles.divider} />
-              <Pressable
-                style={styles.plugButton}
-                onPress={onDisconnect}
-                testID="board-disconnect-button"
-              >
-                <PowerIcon size={15} color={theme.status.error.color} weight="bold" />
-              </Pressable>
-            </>
-          )}
-          {activeBoardId && <BoardWarningControl boardId={activeBoardId} />}
-        </View>
-        {/* An Update Warning / Online Block takes over the gear's icon and accent — same treatment
-            as an active group ride; a plain available update only badges it with a dot. Settings
-            stays this button's one destination, and the update is started from the pill inside. */}
-        <IconButton
-          icon={versionWarning ? ArrowFatLinesUpIcon : GearSixIcon}
-          onPress={() => router.push(routes.settings)}
-          onLongPress={() => router.push(routes.settingsComponents)}
-          accent={versionWarning ? theme.status.upgrade.color : undefined}
-          dot={!versionWarning && availableUpdate ? theme.status.upgrade.color : undefined}
-          accessibilityLabel={availableUpdate ? 'Settings, update available' : 'Settings'}
-          style={styles.iconRight}
+        <BoardPill
+          ref={pillRef}
+          activeBoardId={activeBoardId}
+          activeBoard={activeBoard}
+          bleStatus={bleStatus}
+          isReplay={isReplay}
+          onOpenSelector={() => setSelectorOpen(true)}
+          onDisconnect={onDisconnect}
         />
+        {/* The gear wears whatever is happening inside the drawer — a required update, or a
+            running backup with its progress — the same way Social wears an active Group Ride. */}
+        <View ref={settingsRef} collapsable={false} style={styles.iconRight}>
+          <IconButton
+            icon={GearSixIcon}
+            takeover={
+              trigger.takeover
+                ? {
+                    icon: trigger.takeover === 'update' ? ArrowFatLinesUpIcon : ArrowsClockwiseIcon,
+                    accent: trigger.accent,
+                    progress: trigger.progress,
+                  }
+                : null
+            }
+            onPress={() => setSettingsOpen(true)}
+            onLongPress={() => router.push(routes.settingsComponents)}
+            dot={trigger.dot}
+            accessibilityLabel={trigger.accessibilityLabel}
+            testID="settings-drawer-trigger"
+          />
+        </View>
       </View>
       {hasWeather && (
         <Pressable style={styles.weatherRow} onPress={onWeatherPress}>
@@ -177,12 +226,19 @@ export function TopBar({
         triggerRef={socialRef}
         title="Social"
         icon={UsersThreeIcon}
+        backdropTestID="social-drawer-backdrop"
         onClose={() => setSocialOpen(false)}
       >
-        <SocialSheet
-          accountWidget={<AccountWidget onNavigate={() => setSocialOpen(false)} />}
-          onNavigate={() => setSocialOpen(false)}
-        />
+        <SocialSheet onNavigate={() => setSocialOpen(false)} />
+      </EdgeDrawer>
+
+      <EdgeDrawer
+        visible={settingsOpen}
+        triggerRef={settingsRef}
+        backdropTestID="settings-drawer-backdrop"
+        onClose={() => setSettingsOpen(false)}
+      >
+        <SettingsSheet backup={backup} onNavigate={() => setSettingsOpen(false)} />
       </EdgeDrawer>
 
       <BoardSelectorSheet

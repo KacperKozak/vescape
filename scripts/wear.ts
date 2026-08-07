@@ -1,10 +1,14 @@
-import { existsSync, readdirSync } from 'fs'
+import { existsSync, readdirSync, readFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 
 const ROOT = join(import.meta.dir, '..')
-const PACKAGE = 'app.vescape'
-const ACTIVITY = `${PACKAGE}/.wear.MainActivity`
+/**
+ * The activity class comes from the module's Kotlin namespace, which withWearMirror leaves alone;
+ * only the applicationId follows the Expo profile, so the component has to be fully qualified.
+ */
+const ACTIVITY_CLASS = 'app.vescape.wear.MainActivity'
+const WEAR_GRADLE = join(ROOT, 'android', 'wearos', 'build.gradle')
 const DEBUG_APK = join(
   ROOT,
   'android',
@@ -72,6 +76,23 @@ function syncNative() {
   run(['bun', 'run', 'scripts/native-sync.ts', 'android'])
 }
 
+/**
+ * withWearMirror stamps the watch module with the phone's applicationId, which carries the Expo
+ * profile suffix — a dev prebuild installs `app.vescape.dev` alongside the store `app.vescape`.
+ * Read it back from the generated module so install, launch and smoke check all target the app this
+ * run just built instead of whichever build happens to own the unsuffixed id.
+ */
+function applicationId() {
+  if (!existsSync(WEAR_GRADLE)) fail(`missing ${WEAR_GRADLE} — run \`bun run android\` once`)
+
+  const applicationId = readFileSync(WEAR_GRADLE, 'utf8').match(
+    /applicationId\s+['"]([^'"]+)['"]/,
+  )?.[1]
+  if (!applicationId) fail(`applicationId missing from ${WEAR_GRADLE}`)
+
+  return applicationId
+}
+
 function buildTools() {
   const sdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT
   if (!sdk) fail('ANDROID_HOME / ANDROID_SDK_ROOT not set')
@@ -136,7 +157,7 @@ function findWatch() {
   return watches[0]
 }
 
-function install(serial: string) {
+function install(serial: string, packageName: string) {
   const result = Bun.spawnSync(['adb', '-s', serial, 'install', '-r', SIGNED_APK], {
     cwd: ROOT,
     env: process.env,
@@ -154,11 +175,11 @@ function install(serial: string) {
   }
 
   console.log('\nwear: incompatible existing install, reinstalling')
-  run(['adb', '-s', serial, 'uninstall', PACKAGE])
+  run(['adb', '-s', serial, 'uninstall', packageName])
   run(['adb', '-s', serial, 'install', SIGNED_APK])
 }
 
-function launch(serial: string) {
+function launch(serial: string, packageName: string) {
   // Already-granted (or not-yet-requestable) is not a failure worth aborting the launch for.
   capture([
     'adb',
@@ -167,14 +188,14 @@ function launch(serial: string) {
     'shell',
     'pm',
     'grant',
-    PACKAGE,
+    packageName,
     'android.permission.POST_NOTIFICATIONS',
   ])
 
   // The crash buffer is persistent, so anything already in it predates this install and would make
   // the smoke check fail on a healthy app. Clear it here and everything it holds afterwards is ours.
   run(['adb', '-s', serial, 'logcat', '-b', 'crash', '-c'])
-  run(['adb', '-s', serial, 'shell', 'am', 'start', '-W', '-n', ACTIVITY])
+  run(['adb', '-s', serial, 'shell', 'am', 'start', '-W', '-n', `${packageName}/${ACTIVITY_CLASS}`])
 }
 
 function smokeCheck(serial: string) {
@@ -211,8 +232,10 @@ if (command === 'test') {
   if (command === 'install') {
     signWithPhoneCert()
     const serial = findWatch()
-    install(serial)
-    launch(serial)
+    const packageName = applicationId()
+    console.log(`\nwear: targeting ${packageName} on ${serial}`)
+    install(serial, packageName)
+    launch(serial, packageName)
     smokeCheck(serial)
   }
 }

@@ -4,6 +4,7 @@ import { MAP_DEFAULTS } from '@/modules/map/constants/mapStyles'
 import type { MapNavigationMode } from '@/modules/map/constants/mapStyles'
 import { LEGAL_LIMIT_MAP_CAMERA } from '@/modules/legal/lib/legalLimits'
 import type { reduceMapCameraIntent } from '@/modules/map/lib/cameraController'
+import { toEngineTarget } from '@/modules/map/lib/cameraEngine/cameraTarget'
 import { getPitchForZoom } from '@/modules/map/lib/cameraProfiles'
 import { clamp, MIN_ZOOM, type CameraSnapshot } from '@/modules/map/lib/cameraMotion'
 import type { CameraControlRefs } from '@/screens/main/map/cameraControlTypes'
@@ -33,20 +34,15 @@ export function useCameraIntentCommands({
   onHeadingChange,
   onPerspectiveChange,
 }: UseCameraIntentCommandsParams) {
-  const { cameraRef, currentCameraRef, followZoomLevelRef } = cameraRefs
+  const { currentCameraRef, engine, followZoomLevelRef } = cameraRefs
   const applyCamera = useCallback(
-    (
-      camera: Partial<CameraSnapshot> | undefined,
-      overrides?: { animationDuration?: number; zoomLevel?: number },
-    ) => {
-      cameraRef.current?.setCamera({
-        ...camera,
-        ...overrides,
-        animationDuration: overrides?.animationDuration ?? MAP_DEFAULTS.animationDuration,
-        animationMode: 'easeTo',
-      })
+    (camera: Partial<CameraSnapshot> | undefined, overrides?: { zoomLevel?: number }) => {
+      if (!camera) return
+      engine.setTarget(
+        toEngineTarget({ ...camera, zoomLevel: overrides?.zoomLevel ?? camera.zoomLevel }),
+      )
     },
-    [cameraRef],
+    [engine],
   )
 
   const resetRotation = useCallback(() => {
@@ -78,12 +74,15 @@ export function useCameraIntentCommands({
 
   const setPadding = useCallback(
     (bottom: number) => {
-      applyCamera(
-        { padding: { paddingBottom: bottom, paddingTop: 0, paddingLeft: 0, paddingRight: 0 } },
-        { animationDuration: bottom === 0 ? 0 : 300 },
-      )
+      const padding = { paddingBottom: bottom, paddingTop: 0, paddingLeft: 0, paddingRight: 0 }
+      // Removing the padding (entering map mode) is intentionally instant.
+      if (bottom === 0) {
+        engine.snap({ padding })
+      } else {
+        engine.setTarget({ padding })
+      }
     },
-    [applyCamera],
+    [engine],
   )
 
   const zoomBy = useCallback(

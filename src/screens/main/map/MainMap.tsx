@@ -1,11 +1,12 @@
 import Mapbox from '@rnmapbox/maps'
 import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Animated } from 'react-native'
+import { Animated, View } from 'react-native'
 import type { LocationEvent, MapPoint, MapPointCategory } from 'vescape-core'
 
 import type { DirectionPoint } from '@/modules/map/store/mapStore'
 
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
+import { captureMode } from '@/config/env'
 import {
   MAP_DEFAULTS,
   type MapNavigationMode,
@@ -15,6 +16,7 @@ import type { MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import { getGpsPuckBearing } from '@/modules/map/lib/gpsPuckHeading'
+import { usePhoneHeadingAdapter } from '@/screens/main/map/usePhoneHeadingAdapter'
 import type {
   HistoryGpsSample,
   HistoryMarker,
@@ -25,10 +27,7 @@ import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 
 import type { MainViewState } from '@/screens/main/mainViewState'
 import { type HistoryPreviewTarget, useCameraControls } from '@/screens/main/map/useCameraControls'
-import {
-  phoneHeadingAnimationDuration,
-  type PhoneHeadingStatus,
-} from '@/modules/map/lib/phoneHeading'
+import type { PhoneHeadingStatus } from '@/modules/map/lib/phoneHeading'
 import type { OffscreenMapIndicatorState } from '@/screens/main/map/offscreenMapIndicators'
 import { MapLoadingPlaceholder, MapUnavailable } from '@/screens/main/map/MainMapOverlays'
 import { MainMapScene } from '@/screens/main/map/MainMapScene'
@@ -48,12 +47,7 @@ export interface MainMapHandle {
   recenterLive: (options?: { resetPadding?: boolean; animationDuration?: number }) => void
   previewHistorySession: (preview: HistoryPreviewTarget) => void
   beginPreviewPan: () => void
-  previewPanBy: (
-    deltaX: number,
-    deltaY: number,
-    animationDuration?: number,
-    revealProgress?: number,
-  ) => void
+  previewPanBy: (deltaX: number, deltaY: number, revealProgress: number) => void
   endPreviewPan: () => void
   beginPreviewZoom: () => void
   previewZoomBy: (scale: number) => void
@@ -235,6 +229,7 @@ export const MainMap = memo(
     const [phoneHeadingStatus, setPhoneHeadingStatus] = useState<PhoneHeadingStatus | 'idle'>(
       'idle',
     )
+    const phoneHeadingAdapter = usePhoneHeadingAdapter()
     const headingFollowMode = gpsHeadingMode || phoneHeadingMode
     useRenderRateWarning('MainMap')
     const followHeadingDeg = gpsHeadingMode
@@ -255,6 +250,8 @@ export const MainMap = memo(
     const {
       cameraRef,
       currentCameraRef,
+      engine,
+      previewPanActiveRef,
       gpsCamera,
       followGps,
       setFollowGps,
@@ -263,7 +260,6 @@ export const MainMap = memo(
       recenterLive,
       getLiveFollowCamera,
       getHistoryPreviewCamera,
-      phoneHeadingCameraSuspended,
     } = useCameraControls({
       ref,
       cameraFix,
@@ -287,9 +283,6 @@ export const MainMap = memo(
       },
       follow: {
         updatesEnabled: !(phoneHeadingMode && mode === 'map'),
-        animationDuration: headingFollowMode
-          ? phoneHeadingAnimationDuration()
-          : MAP_DEFAULTS.followAnimationDuration,
       },
       getViewfinderCoordinateFromMap,
       onHeadingChange,
@@ -318,6 +311,12 @@ export const MainMap = memo(
       enabled: !historyActive,
     })
 
+    const handlePhoneFollowHeading = useCallback(
+      (headingDeg: number) => {
+        engine.setTarget({ heading: headingDeg })
+      },
+      [engine],
+    )
     const handlePhoneHeadingChange = useCallback(
       (headingDeg: number | null) => {
         phoneHeadingDegRef.current = headingDeg
@@ -340,7 +339,7 @@ export const MainMap = memo(
       ],
     )
     const { handleOffscreenIndicatorPress, handleFocusDirectionPoint } = useMainMapFocusActions({
-      cameraRef,
+      engine,
       currentCameraRef,
       historyActive,
       riderFocusRows,
@@ -381,6 +380,8 @@ export const MainMap = memo(
     const { handleMapLoaded, handleCameraChanged, handleMapIdle } = useMainMapCameraEvents({
       cameraRef,
       currentCameraRef,
+      engine,
+      previewPanActiveRef,
       cameraFix,
       gpsCameraCenter: gpsCamera.centerCoordinate,
       followGps,
@@ -429,6 +430,20 @@ export const MainMap = memo(
       }
     }, [mode, offscreenMapIndicators, onOffscreenMapIndicatorsChange])
 
+    // Mapbox gives Maestro no idle signal, so a screenshot flow would otherwise have to guess with a
+    // sleep and can catch a half-drawn map. Publish the map's own idle event as a waitable marker.
+    const [mapSettled, setMapSettled] = useState(false)
+    useEffect(() => {
+      if (captureMode) setMapSettled(false)
+    }, [mode])
+    const handleIdle = useCallback(
+      (...args: Parameters<typeof handleMapIdle>) => {
+        handleMapIdle(...args)
+        if (captureMode) setMapSettled(true)
+      },
+      [handleMapIdle],
+    )
+
     if (!MAPBOX_ACCESS_TOKEN) {
       return <MapUnavailable />
     }
@@ -438,63 +453,68 @@ export const MainMap = memo(
     }
 
     return (
-      <MainMapScene
-        mapOpacity={mapOpacity}
-        onLayout={handleMapLayout}
-        onTouchStart={handleTouchStart}
-        mapViewRef={mapViewRef}
-        cameraRef={cameraRef}
-        currentCameraRef={currentCameraRef}
-        mapStyle={mapStyle}
-        rotationLocked={rotationLocked}
-        onDidFinishLoadingMap={handleMapLoaded}
-        onPress={handleMapPress}
-        onLongPress={handleLongPress}
-        onMapIdle={handleMapIdle}
-        onCameraChanged={handleCameraChanged}
-        getLiveFollowCamera={getLiveFollowCamera}
-        historyActive={historyActive}
-        gpsHeadingMode={gpsHeadingMode}
-        phoneHeadingMode={phoneHeadingMode}
-        followGps={followGps}
-        phoneHeadingCameraSuspended={phoneHeadingCameraSuspended}
-        approximateGpsPuckActive={approximateGpsPuckActive}
-        accuracyFix={accuracyFix}
-        onPhoneHeadingChange={handlePhoneHeadingChange}
-        onPhoneHeadingStatusChange={setPhoneHeadingStatus}
-        mode={mode}
-        weatherActive={weatherActive}
-        legalLimitsActive={legalLimitsActive}
-        liveTrailShape={liveTrailShape}
-        rideRouteShape={rideRouteShape}
-        accuracyShape={accuracyShape}
-        gpsPuckBearingDeg={gpsPuckBearingDeg}
-        riders={mapRiders}
-        rideRoute={rideRoute}
-        history={history}
-        cameraZoom={cameraZoom}
-        historyMetricGradientsEnabled={historyMetricGradientsEnabled}
-        historyMetricHotRanges={historyMetricHotRanges}
-        directionPoint={directionPoint}
-        activeNavigationTarget={activeNavigationTarget}
-        selectedNavigationTarget={selectedNavigationTarget}
-        mapPointProps={mapPointProps}
-        onSuppressNextMapPress={suppressNextMapPress}
-        onSelectMarker={setSelectedHistoryMarker}
-        onSelectLegalCountry={handleSelectLegalCountry}
-        onFocusDirectionPoint={handleFocusDirectionPoint}
-        overlays={{
-          selectedHistoryMarker,
-          selectedLegalCountry,
-          legalLimitsActive,
-          weatherActive,
-          showOffscreenIndicators: mode !== 'telemetry',
-          offscreenMapIndicators,
-          onDismissHistoryMarker: dismissHistoryMarker,
-          onCloseLegalCountry: closeLegalCountry,
-          onOffscreenIndicatorPress: handleOffscreenIndicatorPress,
-        }}
-      />
+      <>
+        {captureMode && mapSettled && (
+          <View testID="map-settled" collapsable={false} pointerEvents="none" />
+        )}
+        <MainMapScene
+          mapOpacity={mapOpacity}
+          onLayout={handleMapLayout}
+          onTouchStart={handleTouchStart}
+          mapViewRef={mapViewRef}
+          cameraRef={cameraRef}
+          mapStyle={mapStyle}
+          rotationLocked={rotationLocked}
+          onDidFinishLoadingMap={handleMapLoaded}
+          onPress={handleMapPress}
+          onLongPress={handleLongPress}
+          onMapIdle={handleIdle}
+          onCameraChanged={handleCameraChanged}
+          getLiveFollowCamera={getLiveFollowCamera}
+          historyActive={historyActive}
+          gpsHeadingMode={gpsHeadingMode}
+          phoneHeadingMode={phoneHeadingMode}
+          followGps={followGps}
+          approximateGpsPuckActive={approximateGpsPuckActive}
+          accuracyFix={accuracyFix}
+          onPhoneFollowHeading={handlePhoneFollowHeading}
+          phoneHeadingAdapter={phoneHeadingAdapter}
+          onPhoneHeadingChange={handlePhoneHeadingChange}
+          onPhoneHeadingStatusChange={setPhoneHeadingStatus}
+          mode={mode}
+          weatherActive={weatherActive}
+          legalLimitsActive={legalLimitsActive}
+          liveTrailShape={liveTrailShape}
+          rideRouteShape={rideRouteShape}
+          accuracyShape={accuracyShape}
+          gpsPuckBearingDeg={gpsPuckBearingDeg}
+          riders={mapRiders}
+          rideRoute={rideRoute}
+          history={history}
+          cameraZoom={cameraZoom}
+          historyMetricGradientsEnabled={historyMetricGradientsEnabled}
+          historyMetricHotRanges={historyMetricHotRanges}
+          directionPoint={directionPoint}
+          activeNavigationTarget={activeNavigationTarget}
+          selectedNavigationTarget={selectedNavigationTarget}
+          mapPointProps={mapPointProps}
+          onSuppressNextMapPress={suppressNextMapPress}
+          onSelectMarker={setSelectedHistoryMarker}
+          onSelectLegalCountry={handleSelectLegalCountry}
+          onFocusDirectionPoint={handleFocusDirectionPoint}
+          overlays={{
+            selectedHistoryMarker,
+            selectedLegalCountry,
+            legalLimitsActive,
+            weatherActive,
+            showOffscreenIndicators: mode !== 'telemetry',
+            offscreenMapIndicators,
+            onDismissHistoryMarker: dismissHistoryMarker,
+            onCloseLegalCountry: closeLegalCountry,
+            onOffscreenIndicatorPress: handleOffscreenIndicatorPress,
+          }}
+        />
+      </>
     )
   }),
 )

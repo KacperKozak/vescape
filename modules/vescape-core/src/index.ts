@@ -1026,6 +1026,11 @@ export interface AppSettings {
   >
   /** Battery SoC Estimate median window, seconds. 0 = off. See ADR-0016. */
   socEstimateWindowSeconds: number
+  /**
+   * Board Move strength as a percentage of the full remote input, 10..100. The board still clamps
+   * the result with its own `remote.max_move_speed` / `remote_throttle_current_max`.
+   */
+  boardMoveStrengthPercent: number
   /** Play on/off sounds on board connect and involuntary disconnect. */
   connectionSoundsEnabled: boolean
   /** Android-only: use CompanionDeviceManager presence to connect selected board when nearby. */
@@ -1157,6 +1162,21 @@ export interface DebugFixture {
  * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `startReplay`
  */
 export const REPLAY_BOARD_ID_PREFIX = 'replay:'
+
+/**
+ * Opt-in fast-forward for the opening stretch of a replay, so a session can come up with its live
+ * charts already filled instead of spending real minutes earning them. Omitted entirely, a replay
+ * runs the whole recording at 1×.
+ *
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/replay/ReplayClock.kt
+ * @parity /modules/vescape-core/ios/replay/ReplayClock.swift
+ */
+export interface DebugReplayOptions {
+  /** How much of the recording plays faster than real time. `0` (default) is a plain 1× replay. */
+  warmupMs?: number
+  /** How much faster than real time that window is delivered. Default `1`. */
+  warmupSpeed?: number
+}
 
 /** Whether a connected board id belongs to a dev-mode replay session. */
 export function isReplayBoardId(boardId: string | null | undefined): boolean {
@@ -1545,6 +1565,7 @@ type VescapeCoreEvents = {
   onBms: (event: BmsEvent) => void
   onBmsSeries: (event: NativeBmsSeriesEvent) => void
   onLocation: (event: LocationEvent) => void
+  onReplayPhoneHeading: (event: { headingDeg: number }) => void
   onTelemetryRebuildProgress: (event: TelemetryRebuildProgressEvent) => void
   onBoardProbeProgress: (event: BoardProbeProgressEvent) => void
   /** Observe WebSocket connection state to the Group Ride relay. */
@@ -1618,7 +1639,8 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   listBundledDebugFixtures(): Promise<DebugFixture[]>
   exportDebugRecording(name: string): Promise<DatabaseBackupResult>
   deleteDebugRecording(name: string): Promise<void>
-  startDebugReplay(name: string): Promise<void>
+  startDebugReplay(name: string, options: DebugReplayOptions | null): Promise<void>
+  recordPhoneHeading(headingDeg: number): void
   stopDebugReplay(): Promise<void>
   reportUiError(message: string, source?: string | null, stack?: string | null): void
   reportDiagnosticTest(): DiagnosticStatus
@@ -1683,6 +1705,8 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   lockRemoteTilt(value: number): Promise<boolean>
   releaseRemoteTilt(value: number, durationMs: number): Promise<boolean>
   stopRemoteTilt(): Promise<boolean>
+  startBoardMove(input: number): Promise<boolean>
+  stopBoardMove(): Promise<boolean>
   getTuneProfiles(boardId: string, refloatBaseVersion?: string | null): Promise<TuneProfile[]>
   getTuneProfile(profileId: string): Promise<TuneProfile | null>
   createProfile(
@@ -1748,13 +1772,24 @@ const native = requireNativeModule<VescapeCoreNativeModule>('VescapeCore')
 const emitter = native
 const E2E_ENABLED = process.env.EXPO_PUBLIC_E2E === '1'
 
+/**
+ * BLE discovery is faked in the smoke run too, and only discovery.
+ *
+ * An emulator has no radio, so no harness can ever scan a real board — that fake stands in for
+ * absent hardware. Every other `E2E_ENABLED` branch below stands in for absent *data*, which the
+ * smoke run gets from a restored database and a replayed recording instead (`@/config/env`
+ * `smokeMode`). Folding the two under one flag is what would make a smoke run assert against
+ * `e2eFake` rather than the native stack it exists to test.
+ */
+const FAKE_SCAN = E2E_ENABLED || process.env.EXPO_PUBLIC_SMOKE === '1'
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
 
 /** Start BLE scan — emits onDevice events for every advertisement received. */
 export function scan(): void {
-  if (E2E_ENABLED) {
+  if (FAKE_SCAN) {
     e2eFake.scan()
     return
   }
@@ -1764,7 +1799,7 @@ export function scan(): void {
 
 /** Stop ongoing BLE scan. */
 export function stopScan(): void {
-  if (E2E_ENABLED) {
+  if (FAKE_SCAN) {
     e2eFake.stopScan()
     return
   }
@@ -2042,9 +2077,14 @@ export async function deleteDebugRecording(name: string): Promise<void> {
 /**
  * Dev mode: replay a Debug Recording through the real native session stack under a synthetic
  * `replay:<name>` board id (ADR 0024). Ends like a disconnect when the recording runs out.
+ *
+ * Defaults to 1× — the recording plays back exactly as the ride happened, which is what the Replay
+ * UI wants. Pass a warmup to trade that off for a session that starts with its live charts already
+ * filled: `warmupMs` of the recording is delivered `warmupSpeed` times faster than real time before
+ * playback settles to 1×.
  */
-export async function startDebugReplay(name: string): Promise<void> {
-  return native.startDebugReplay(name)
+export async function startDebugReplay(name: string, options?: DebugReplayOptions): Promise<void> {
+  return native.startDebugReplay(name, options ?? null)
 }
 
 /** Dev mode: stop an active Debug Recording replay session (normal disconnect). */
@@ -2322,6 +2362,27 @@ export async function stopRemoteTilt(): Promise<boolean> {
   return native.stopRemoteTilt()
 }
 
+/**
+ * Hold a Board Move input until {@link stopBoardMove}. `input` is `-127..127`:
+ * positive moves the board forward, negative backward, `0` stops. Unlike Remote
+ * Tilt this drives motor output, and the firmware honours it only while the
+ * board is disengaged (ready). Native repeats the input on a tick, because the
+ * board drops the request after ~1s of silence.
+ *
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/protocol/VescProtocol.kt `buildBoardMoveCommand`
+ * @parity /modules/vescape-core/ios/protocol/VescProtocol.swift `buildBoardMoveCommand`
+ */
+export async function startBoardMove(input: number): Promise<boolean> {
+  if (E2E_ENABLED) return true
+  return native.startBoardMove(input)
+}
+
+/** Stop moving and send a neutral input so the board halts immediately. */
+export async function stopBoardMove(): Promise<boolean> {
+  if (E2E_ENABLED) return true
+  return native.stopBoardMove()
+}
+
 export async function getTuneProfiles(
   boardId: string,
   refloatBaseVersion?: string | null,
@@ -2584,8 +2645,13 @@ export function seedE2EData(flow: string): void {
 // Event listeners
 // ---------------------------------------------------------------------------
 
+/**
+ * Discovery is a pair: `scan()` emits into `e2eFake`'s listener set, so a build that fakes the scan
+ * has to subscribe there too. Splitting only the emit side leaves JS listening to the native
+ * emitter for advertisements nothing is sending — the scan screen simply stays empty.
+ */
 export function addDeviceListener(cb: (event: DeviceFoundEvent) => void): EventSubscription {
-  if (E2E_ENABLED) {
+  if (FAKE_SCAN) {
     return e2eFake.addDeviceListener(cb)
   }
 
@@ -2667,6 +2733,33 @@ export function addBmsSeriesListener(cb: (event: BmsSeriesUpdate) => void): Even
 
 export function addLocationListener(cb: (event: LocationEvent) => void): EventSubscription {
   return emitter.addListener('onLocation', cb)
+}
+
+/**
+ * Compass readings replayed from a Debug Recording, in place of the phone's own magnetometer.
+ *
+ * The sensor is read in JS, so native can neither observe it nor apply it — it only stores and
+ * replays it. A replay feeds these back in at the sensor boundary so every compass-driven feature
+ * runs its real code path against the rotation the rider's phone actually measured.
+ *
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `onReplayHeading`
+ * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `onReplayHeading`
+ */
+export function addReplayPhoneHeadingListener(
+  cb: (event: { headingDeg: number }) => void,
+): EventSubscription {
+  return emitter.addListener('onReplayPhoneHeading', cb)
+}
+
+/**
+ * Offer a compass reading to whatever Debug Recording is running; native drops it when nothing is
+ * recording. Safe (and intended) to call unconditionally while the map's heading layer is live.
+ *
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `recordPhoneHeading`
+ * @parity /modules/vescape-core/ios/VescapeCoreModule.swift `recordPhoneHeading`
+ */
+export function recordPhoneHeading(headingDeg: number): void {
+  native.recordPhoneHeading(headingDeg)
 }
 
 export function addTelemetryRebuildProgressListener(
