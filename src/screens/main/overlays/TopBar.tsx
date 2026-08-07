@@ -224,6 +224,7 @@ export function TopBar({
       <EdgeDrawer
         visible={socialOpen}
         triggerRef={socialRef}
+        edge="top"
         title="Social"
         icon={UsersThreeIcon}
         backdropTestID="social-drawer-backdrop"
@@ -235,6 +236,7 @@ export function TopBar({
       <EdgeDrawer
         visible={settingsOpen}
         triggerRef={settingsRef}
+        edge="top"
         backdropTestID="settings-drawer-backdrop"
         onClose={() => setSettingsOpen(false)}
       >
