@@ -39,6 +39,9 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -70,6 +73,9 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           path: .release-trusted
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
