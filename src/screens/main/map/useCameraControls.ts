@@ -72,6 +72,10 @@ export function useCameraControls({
   // eslint-disable-next-line react-hooks/refs
   const [engine] = useState(() =>
     createCameraEngine({
+      // setCameraDirect deliberately does not interrupt native camera
+      // animations (see docs/agents/mapbox-patches.md), so a fling outlives
+      // every frame the engine writes unless it is cancelled outright.
+      cancelNativeMotion: () => cameraRef.current?.cancelCameraAnimations(),
       applyFrame: (camera: EngineCamera) => {
         currentCameraRef.current = camera
         cameraRef.current?.setCameraDirect({
