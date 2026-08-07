@@ -16,11 +16,21 @@ interface StepperWidgetProps {
   disabled?: boolean
   previousAccessibilityLabel?: string
   nextAccessibilityLabel?: string
-  onPrevious: () => void
-  onNext: () => void
+  onPrevious?: () => void
+  onNext?: () => void
+  /** Hold controls: fired while the button is held down, e.g. keep the board moving. */
+  onPreviousPressIn?: () => void
+  onNextPressIn?: () => void
+  /** Fired when either held button is released. */
+  onPressOut?: () => void
 }
 
-/** A widget with two explicit actions at the trailing edge, useful for nudge controls. */
+const noop = () => {}
+
+/**
+ * A widget with two explicit actions at the trailing edge, useful for nudge controls.
+ * Pass the press-in/press-out handlers instead for hold-to-act controls.
+ */
 export function StepperWidget({
   icon: IconComponent,
   label,
@@ -33,6 +43,9 @@ export function StepperWidget({
   nextAccessibilityLabel = `${label} forward`,
   onPrevious,
   onNext,
+  onPreviousPressIn,
+  onNextPressIn,
+  onPressOut,
 }: StepperWidgetProps) {
   return (
     <View style={[styles.widget, size === 'half' && styles.half, disabled && styles.disabled]}>
@@ -44,13 +57,17 @@ export function StepperWidget({
         <IconButton
           icon={previousIcon}
           disabled={disabled}
-          onPress={onPrevious}
+          onPress={onPrevious ?? noop}
+          onPressIn={onPreviousPressIn}
+          onPressOut={onPressOut}
           accessibilityLabel={previousAccessibilityLabel}
         />
         <IconButton
           icon={nextIcon}
           disabled={disabled}
-          onPress={onNext}
+          onPress={onNext ?? noop}
+          onPressIn={onNextPressIn}
+          onPressOut={onPressOut}
           accessibilityLabel={nextAccessibilityLabel}
         />
       </View>

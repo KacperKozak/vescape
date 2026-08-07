@@ -24,6 +24,8 @@ interface IconButtonProps {
   icon: Icon
   onPress: () => void
   onLongPress?: () => void
+  onPressIn?: () => void
+  onPressOut?: () => void
   size?: keyof typeof SIZES
   disabled?: boolean
   destructive?: boolean
@@ -41,6 +43,8 @@ export function IconButton({
   icon: Icon,
   onPress,
   onLongPress,
+  onPressIn,
+  onPressOut,
   size = 'sm',
   disabled = false,
   destructive = false,
@@ -90,6 +94,8 @@ export function IconButton({
       android_ripple={{ ...interaction.rippleBorderless, radius: dim / 2 }}
       onPress={onPress}
       onLongPress={onLongPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
       disabled={isDisabled}
     >
       {loading ? (

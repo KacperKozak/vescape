@@ -71,6 +71,15 @@ internal final class BoardSessionController: VescGattListener {
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `transport`
   private var replayTransport: ReplayTransport?
   private var transport: SessionTransport { replayTransport ?? gatt }
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `boardMoveController`
+  private lazy var boardMoveController = BoardMoveController(
+    transport: { [weak self] in
+      guard let self, self.phase == .connected, let config = self.config else { return nil }
+      return config.transport ?? .direct
+    },
+    generation: { [weak self] in BoardMoveGeneration.forBaseVersion(self?.config?.refloatBaseVersion) },
+    send: { [weak self] payload in self?.transport.sendPayload(payload) ?? false }
+  )
   /// The clock this session stamps and compares its data against. Wall time for every real session;
   /// a replay swaps in its own for the session's lifetime so a warmed-up playback writes a timeline
   /// that agrees with itself. Never read directly — go through `nowMs()`.
@@ -364,6 +373,20 @@ internal final class BoardSessionController: VescGattListener {
   // MARK: - Live-state snapshot
 
   func remoteTiltState() -> [String: Any?]? { nil }
+
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `startBoardMove`
+  func startBoardMove(input: Int) -> Bool {
+    firmwareCommandsTrusted() && boardMoveController.hold(input)
+  }
+
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `stopBoardMove`
+  func stopBoardMove() -> Bool {
+    firmwareCommandsTrusted() && boardMoveController.stop()
+  }
+
+  private func firmwareCommandsTrusted() -> Bool {
+    phase == .connected && linkIntegrity == .trusted
+  }
   func gpsActive() -> Bool { gpsMonitor.active }
   func gpsLatestLocation() -> [String: Any?]? { latestLocation?.map }
   func gpsLatestPreciseLocation() -> [String: Any?]? { latestPreciseLocation?.map }
@@ -608,6 +631,7 @@ internal final class BoardSessionController: VescGattListener {
   }
 
   private func endSession(phase: BoardPhase, error: String?) {
+    boardMoveController.stop()
     // Final write so the persisted last battery is fresh, not up to 30s stale (runs before config clears).
     persistLastBattery(percent: latestBatterySoc, voltage: latestBatteryVoltage, now: nowMs(), force: true)
     latestBatterySoc = nil

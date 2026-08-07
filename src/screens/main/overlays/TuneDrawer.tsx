@@ -34,6 +34,7 @@ import { legalPolicyFromReference } from '@/modules/legal/lib/legalMode'
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
 import { errorMessage } from '@/helpers/error'
+import { useBoardMoveControl } from '@/modules/board/hooks/useBoardMoveControl'
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useBoardStore } from '@/modules/board/store/boardStore'
 import { useLegalModeStore } from '@/modules/legal/store/legalModeStore'
@@ -86,6 +87,7 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   const boardConnected = useBleStore((state) => state.status === 'connected')
   const linkIntegrity = useBleStore((state) => state.linkIntegrity)
   const quickControlsEnabled = boardConnected && canRunFirmwareCommand(linkIntegrity)
+  const boardMove = useBoardMoveControl()
   const waitingForTrustedLink = boardConnected && !quickControlsEnabled
   const profilesForBoard = profilesLoadedForBoard
     ? profiles.filter(
@@ -217,10 +219,11 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
             label="Move board"
             accent={theme.palette.cyan.color}
             disabled={!quickControlsEnabled}
-            previousAccessibilityLabel="Move board down"
-            nextAccessibilityLabel="Move board up"
-            onPrevious={() => {}}
-            onNext={() => {}}
+            previousAccessibilityLabel="Move board backward"
+            nextAccessibilityLabel="Move board forward"
+            onPreviousPressIn={boardMove.moveBackward}
+            onNextPressIn={boardMove.moveForward}
+            onPressOut={boardMove.stopMove}
           />
         </View>
       </View>
