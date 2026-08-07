@@ -163,11 +163,26 @@ export interface BoardLink {
   refloatBaseVersion?: string
 }
 
+// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `BoardEntity`
+// @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `composeBoard`
 export interface Board {
   id: string
   name: string
   description: string | null
   createdAt: number
+  /**
+   * Incremental-sync cursor: epoch ms of the last write to this board, from the same clock as
+   * {@link createdAt}. Native stamps it on every upsert (including partial edits), so a value sent
+   * from JS is ignored — read it, do not author it.
+   */
+  updatedAt: number
+  /**
+   * Tombstone stamp: epoch ms of the rider's delete, `null` while the Board is alive. A deleted
+   * Board keeps its row so Ride History can still name it (ADR 0027) — {@link getBoards} filters
+   * tombstones, {@link getBoard} deliberately does not. Native-owned like {@link updatedAt}:
+   * deletion goes through {@link deleteBoard}, never through an upsert.
+   */
+  deletedAt: number | null
   batteryConfig: BatteryConfig | null
   /** Last Battery SoC Estimate persisted natively; survives full app kill. `undefined` before first session. */
   lastBattery?: LastBattery | null
@@ -206,6 +221,14 @@ export interface Board {
   /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
   link: BoardLink | null
 }
+
+/**
+ * Write shape for {@link upsertBoard}. Native stamps `updatedAt` from its own clock on every write,
+ * so callers never author it — a board that has never been persisted has no cursor yet. `deletedAt`
+ * is out for the same reason: a tombstone is stamped by {@link deleteBoard} alone, and an upsert
+ * never clears the one already on the row.
+ */
+export type BoardInput = Omit<Board, 'updatedAt' | 'deletedAt'>
 
 export interface LastBattery {
   percent: number
@@ -270,11 +293,23 @@ export interface AlertRule {
   soundType: AlertSoundType
   createdAt: number
   /**
+   * Incremental-sync cursor: epoch ms of the last write to this rule, from the same clock as
+   * {@link createdAt}. Native stamps it on every upsert and on the enable/disable toggle, so a
+   * value sent from JS is ignored — read it, do not author it.
+   */
+  updatedAt: number
+  /**
    * Provenance tag. `manual` (or absent) = rider-authored. `preset` rules are generated + owned
    * by JS orchestration and regenerated wholesale; native persists the string opaquely.
    */
   source?: 'manual' | 'preset'
 }
+
+/**
+ * Write shape for {@link upsertAlertRule}. Native stamps `updatedAt` from its own clock on every
+ * write, so callers never author it — a rule that has never been persisted has no cursor yet.
+ */
+export type AlertRuleInput = Omit<AlertRule, 'updatedAt'>
 
 export type PrivacyZonePreset = 'home' | 'work' | 'custom'
 
@@ -512,7 +547,8 @@ export interface LiveStateEvent {
 export interface TelemetryHistoryOptions {
   fromMs?: number
   toMs?: number
-  deviceId?: string
+  /** Scope to one Board (`boards.id`). Telemetry is keyed on the Board, not the BLE id (ADR 0028). */
+  boardId?: string
   limit?: number
   cursorBeforeMs?: number
 }
@@ -520,14 +556,14 @@ export interface TelemetryHistoryOptions {
 export interface DiagnosticEventOptions {
   fromMs?: number
   toMs?: number
-  deviceId?: string
+  boardId?: string
   limit?: number
 }
 
 export interface TelemetryDeleteRangeOptions {
   fromMs: number
   toMs: number
-  deviceId?: string | null
+  boardId?: string | null
 }
 
 export interface TelemetryMinuteBucket {
@@ -535,8 +571,10 @@ export interface TelemetryMinuteBucket {
   startAtMs: number
   endAtMs: number
   bucketStartMs: number
-  deviceId: string | null
-  deviceName: string
+  /** Owning Board (`boards.id`), or null when the samples match no saved Board. */
+  boardId: string | null
+  /** Resolved from `boards` on read, never stored on the row — a rename relabels history. */
+  boardName: string
   sampleCount: number
   gpsPointCount: number
   preciseGpsPointCount: number
@@ -574,8 +612,8 @@ export interface TelemetryMinuteBucket {
 export interface TelemetrySample {
   id: number
   capturedAtMs: number
-  deviceId: string | null
-  deviceName: string
+  boardId: string | null
+  boardName: string
   speedKmh: number
   batteryVoltage: number
   /** IR-compensated battery %, derived on read from the board's battery config. Null if no config. */
@@ -604,8 +642,8 @@ export interface TelemetrySample {
 export interface HistoryGpsSample {
   id: number
   capturedAtMs: number
-  deviceId: string | null
-  deviceName: string
+  boardId: string | null
+  boardName: string
   latitude: number
   longitude: number
   speedMps: number | null
@@ -628,15 +666,16 @@ export interface HistoryMarker {
     | 'gap'
     | 'app_stop'
     | 'auto_pause'
-  deviceId: string | null
-  deviceName: string | null
+  /** Owning Board (`boards.id`); null when the Marker was written with no Board connected. */
+  boardId: string | null
   message: string | null
   gapMs: number | null
 }
 
 export interface MetricExclusion {
   id: number
-  deviceId: string | null
+  /** Owning Board (`boards.id`). A range excludes one Board's samples, so it is never absent. */
+  boardId: string
   reason: string
   startMs: number
   endMs: number
@@ -679,8 +718,8 @@ const BMS_SERIES_BALANCE_LANE_BITS = 30
 interface NativeHistoryRange {
   boardColumns: ArrayBuffer
   boardCount: number
-  boardDevices: (string | null)[]
-  boardDeviceNames: string[]
+  boardIds: (string | null)[]
+  boardNames: string[]
   gpsSamples: HistoryGpsSample[]
   markers: HistoryMarker[]
   exclusions: MetricExclusion[]
@@ -698,18 +737,18 @@ const nullableLane = (value: number): number | null => (Number.isNaN(value) ? nu
  * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt
  */
 function decodeBoardSamples(range: NativeHistoryRange): TelemetrySample[] {
-  const { boardCount, boardDevices, boardDeviceNames } = range
+  const { boardCount, boardIds, boardNames } = range
   if (!boardCount || !range.boardColumns) return []
   const lanes = new Float64Array(range.boardColumns)
   const samples = new Array<TelemetrySample>(boardCount)
   for (let i = 0; i < boardCount; i++) {
     const o = i * SAMPLE_COLUMN_COUNT
-    const deviceIndex = lanes[o + 2]
+    const boardIndex = lanes[o + 2]
     samples[i] = {
       id: lanes[o],
       capturedAtMs: lanes[o + 1],
-      deviceId: boardDevices[deviceIndex] ?? null,
-      deviceName: boardDeviceNames[deviceIndex],
+      boardId: boardIds[boardIndex] ?? null,
+      boardName: boardNames[boardIndex],
       speedKmh: lanes[o + 3],
       batteryVoltage: lanes[o + 4],
       batteryPercent: nullableLane(lanes[o + 5]),
@@ -829,7 +868,7 @@ export interface Favorite {
 export interface CreateFavoriteOptions {
   startMs: number
   endMs: number
-  deviceId?: string
+  boardId?: string
   name?: string
 }
 
@@ -840,7 +879,7 @@ export interface CreateFavoriteOptions {
 export interface UpdateFavoriteOptions {
   startMs: number
   endMs: number
-  deviceId?: string
+  boardId?: string
   name: string | null
 }
 
@@ -1015,6 +1054,22 @@ export interface AppSettings {
   /** Minutes without a board connection before auto close fires. UI offers 1–480; native accepts up to 1440. */
   autoCloseDelayMinutes: number
   /**
+   * Backup master switch, off by default. Off means the uploader does nothing at all: no scan, no
+   * request, no retry, no notification. Phone-local, and deliberately not synced — a restored
+   * snapshot must never be able to switch backup back on.
+   */
+  syncEnabled: boolean
+  /**
+   * Nothing uploads on a metered connection while this is on — mid-ride included. No row classes,
+   * no backlog thresholds, no partial exceptions.
+   */
+  syncWifiOnly: boolean
+  /**
+   * The one-time backup choice has been offered on this phone and answered. Phone-local: the
+   * expensive first upload belongs to the phone that holds the backlog.
+   */
+  syncBackupChoiceMade: boolean
+  /**
    * Max telemetry poll rate in Hz, applied as a minimum spacing floor between
    * requests. Polling stays response-paced (the next request is only sent once
    * the previous reply lands), so this caps the rate without ever outrunning the
@@ -1065,8 +1120,8 @@ export interface LocalDiagnosticEvent {
   eventName: string
   operation: string | null
   phase: string | null
-  deviceId: string | null
-  deviceName: string | null
+  /** Owning Board (`boards.id`); null when the event was recorded with no Board connected. */
+  boardId: string | null
   message: string | null
   propertiesJson: string
 }
@@ -1263,6 +1318,28 @@ export interface AppDataChangedEvent {
 }
 
 /**
+ * What a Sync Action can name — and, by omission, what it cannot. A deleted row cannot carry a
+ * Change Timestamp saying it is gone, so native appends a Sync Action for every semantic removal and
+ * the server replays it against the Rider's backup.
+ *
+ * Every case is configuration or current state a Rider edits directly. Ride History is absent on
+ * purpose: telemetry is pruned locally on a retention rule, and an action naming it would delete
+ * exactly the rides the backup exists to preserve. The log is native-owned — JS never writes it —
+ * and this union exists so the two native definitions cannot drift apart unnoticed.
+ * @parity /modules/vescape-core/ios/telemetry/SyncActionLog.swift `DeleteTarget`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `DeleteTarget`
+ */
+export type DeleteTarget =
+  | 'appSetting'
+  | 'board'
+  | 'boardSetting'
+  | 'boardWarning'
+  | 'alert'
+  | 'tuneProfile'
+  | 'privacyZone'
+  | 'favorite'
+
+/**
  * Two-level Board Warning severity, fixed at detection time.
  * @parity /modules/vescape-core/ios/warnings/BoardWarningKind.swift `BoardWarningSeverity`
  * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/warnings/BoardWarningRegistry.kt `BoardWarningSeverity`
@@ -1404,7 +1481,61 @@ export interface DeviceCredentialStatus {
   state: DeviceCredentialState
   accountId: string | null
   expiresAt: string | null
+  /**
+   * A different Vescape Account signed in on a phone whose local database already belongs to another
+   * one. Native refuses to bind — resetting the Sync Cursors over the existing rows would upload the
+   * previous Account's data to the new one — so the credential is not stored until the Rider
+   * confirms through `confirmSyncAccountReset` that all local app data is erased.
+   */
+  accountChangeRequiresReset?: boolean
 }
+
+/**
+ * Why the uploader stopped. A paused engine is not woken by ordinary timer or connectivity kicks.
+ *
+ * @parity /modules/vescape-core/ios/sync/SyncPolicy.swift `SyncPauseReason`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/sync/SyncPolicy.kt `SyncPauseReason`
+ */
+export type SyncPauseReason = 'authentication' | 'protocol' | 'rowTooLarge'
+
+/**
+ * The backup state the Rider is shown, derived natively from the same state the uploader decides on.
+ *
+ * @parity /modules/vescape-core/ios/sync/SyncPolicy.swift `SyncActivity`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/sync/SyncPolicy.kt `SyncActivity`
+ */
+export type SyncActivity =
+  | 'disabled'
+  | 'signedOut'
+  | 'upToDate'
+  | 'syncing'
+  | 'waitingForWifi'
+  | 'offline'
+  | 'paused'
+
+/**
+ * Native-owned backup state. JS renders it and never infers one of its own.
+ *
+ * @parity /modules/vescape-core/ios/sync/SyncCoordinator.swift `SyncStatus`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/sync/SyncCoordinator.kt `SyncStatus`
+ */
+export interface SyncStatus {
+  /** The Account this local database is bound to, or null while it has never been claimed. */
+  accountId: string | null
+  pendingRows: number
+  activity: SyncActivity
+  /** Which permanent failure stopped the uploader, when `activity` is `paused`. */
+  pause: SyncPauseReason | null
+  lastUploadAtMs: number | null
+}
+
+/**
+ * Backup state changed. Emitted on every transition and replayed on subscribe, so a late listener is
+ * immediately consistent.
+ * @parity /modules/vescape-core/ios/VescapeCoreModule.swift `sendSyncStatus`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `onSyncStatus`
+ */
+export type SyncStatusEvent = SyncStatus
 
 export type CriticalRideNotificationPermissionStatus =
   | 'not-determined'
@@ -1453,6 +1584,7 @@ type VescapeCoreEvents = {
   onBoardWarnings: (event: BoardWarningsEvent) => void
   /** Native App Status, on every successful refresh and on subscribe. */
   onAppStatus: (event: AppStatusEvent) => void
+  onSyncStatus: (event: SyncStatusEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -1523,6 +1655,12 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   getDeviceCredentialState(): DeviceCredentialStatus
   revokeDeviceCredential(): Promise<void>
   clearDeviceCredential(): void
+  confirmSyncAccountReset(
+    serverUrl: string,
+    deviceToken: string,
+    accountId: string,
+  ): Promise<DeviceCredentialStatus>
+  getSyncStatus(): Promise<SyncStatus>
   openAppUpdate(): void
   getRemoteTiltState(): RemoteTiltState | null
   setSelectedBoard(boardId: string | null): void
@@ -1531,13 +1669,13 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   getTelemetrySamples(options: {
     fromMs: number
     toMs: number
-    deviceId?: string
+    boardId?: string
     limit?: number
   }): Promise<TelemetrySample[]>
   getHistoryRange(options: {
     fromMs: number
     toMs: number
-    deviceId?: string
+    boardId?: string
     limit?: number
   }): Promise<NativeHistoryRange>
   getTelemetrySummary(): Promise<TelemetrySummary>
@@ -1601,10 +1739,10 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   deleteTelemetryRange(options: TelemetryDeleteRangeOptions): Promise<number>
   clearTelemetryHistory(): Promise<void>
   getBoards(): Promise<Board[]>
-  upsertBoard(board: Board): Promise<void>
+  upsertBoard(board: BoardInput): Promise<void>
   deleteBoard(id: string): Promise<void>
   getAlertRules(boardId: string): Promise<AlertRule[]>
-  upsertAlertRule(rule: AlertRule): Promise<void>
+  upsertAlertRule(rule: AlertRuleInput): Promise<void>
   setAlertRuleEnabled(boardId: string, id: string, enabled: boolean): Promise<void>
   deleteAlertRule(boardId: string, id: string): Promise<void>
   getPrivacyZones(): Promise<PrivacyZone[]>
@@ -2000,6 +2138,25 @@ export function getDeviceCredentialState(): DeviceCredentialStatus {
   return native.getDeviceCredentialState()
 }
 
+/**
+ * Erase all local app data and hand the fresh database to a different Account. Destructive, and only
+ * ever called after the Rider confirms — cloud restore does not exist in this version, so what is
+ * erased is gone.
+ */
+export async function confirmSyncAccountReset(
+  serverUrl: string,
+  deviceToken: string,
+  accountId: string,
+): Promise<DeviceCredentialStatus> {
+  return native.confirmSyncAccountReset(serverUrl, deviceToken, accountId)
+}
+
+/** Read native-owned backup state: what is bound, what is pending, and why it stopped. */
+export async function getSyncStatus(): Promise<SyncStatus> {
+  return native.getSyncStatus()
+}
+
+/** Back up over Wi-Fi only. Native waits for Wi-Fi rather than failing on a metered connection. */
 export async function revokeDeviceCredential(): Promise<void> {
   return native.revokeDeviceCredential()
 }
@@ -2047,7 +2204,7 @@ export async function getTelemetryHistory(
 export async function getTelemetrySamples(options: {
   fromMs: number
   toMs: number
-  deviceId?: string
+  boardId?: string
   limit?: number
 }): Promise<TelemetrySample[]> {
   if (E2E_ENABLED) {
@@ -2060,7 +2217,7 @@ export async function getTelemetrySamples(options: {
 export async function getHistoryRange(options: {
   fromMs: number
   toMs: number
-  deviceId?: string
+  boardId?: string
   limit?: number
 }): Promise<HistoryRange> {
   const range = E2E_ENABLED
@@ -2330,7 +2487,7 @@ export async function getBoards(): Promise<Board[]> {
   return native.getBoards()
 }
 
-export async function upsertBoard(board: Board): Promise<void> {
+export async function upsertBoard(board: BoardInput): Promise<void> {
   if (E2E_ENABLED) {
     e2eFake.upsertBoard(board)
     return
@@ -2346,7 +2503,7 @@ export async function getAlertRules(boardId: string): Promise<AlertRule[]> {
   return native.getAlertRules(boardId)
 }
 
-export async function upsertAlertRule(rule: AlertRule): Promise<void> {
+export async function upsertAlertRule(rule: AlertRuleInput): Promise<void> {
   return native.upsertAlertRule(rule)
 }
 
@@ -2519,6 +2676,10 @@ export function addBoardWarningsListener(
 
 export function addAppStatusListener(cb: (event: AppStatusEvent) => void): EventSubscription {
   return emitter.addListener('onAppStatus', cb)
+}
+
+export function addSyncStatusListener(cb: (event: SyncStatusEvent) => void): EventSubscription {
+  return emitter.addListener('onSyncStatus', cb)
 }
 
 export function addLiveStateListener(cb: (event: LiveStateEvent) => void): EventSubscription {

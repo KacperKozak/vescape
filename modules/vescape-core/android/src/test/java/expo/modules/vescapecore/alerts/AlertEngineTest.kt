@@ -29,6 +29,7 @@ class AlertEngineTest {
         soundType = soundType,
         createdAt = 0L,
         source = null,
+        updatedAt = 0L,
     )
 
     private fun telemetry(

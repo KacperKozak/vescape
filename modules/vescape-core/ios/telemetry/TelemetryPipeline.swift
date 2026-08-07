@@ -27,8 +27,8 @@ internal struct TelemetryLocationCapture {
 internal struct TelemetryCapture {
   let capturedAtMs: Int64
   let elapsedRealtimeMs: Int64
-  let deviceId: String?
-  let deviceName: String?
+  /// Owning Board (`boards.id`) — what every telemetry table is keyed on (ADR 0028).
+  let boardId: String?
   let canId: Int?
   let telemetry: RefloatTelemetry
   let location: TelemetryLocationCapture?
@@ -36,8 +36,8 @@ internal struct TelemetryCapture {
 
 internal struct BucketTelemetryPoint {
   let capturedAtMs: Int64
-  let deviceId: String?
-  let deviceName: String?
+  /// Owning Board (`boards.id`); the durable identity telemetry is keyed on (ADR 0028).
+  let boardId: String?
   let speedCentiKmh: Int
   let batteryVoltageMv: Int
   let motorCurrentMa: Int
@@ -66,15 +66,13 @@ internal struct FullTelemetryState {
   var t: RefloatTelemetry { capture.telemetry }
   var capturedAtMs: Int64 { capture.capturedAtMs }
   var elapsedRealtimeMs: Int64 { capture.elapsedRealtimeMs }
-  var deviceId: String? { capture.deviceId }
-  var deviceName: String? { capture.deviceName }
+  var boardId: String? { capture.boardId }
   var location: TelemetryLocationCapture? { capture.location }
 
   func toBucketPoint() -> BucketTelemetryPoint {
     BucketTelemetryPoint(
       capturedAtMs: capturedAtMs,
-      deviceId: deviceId,
-      deviceName: deviceName,
+      boardId: boardId,
       speedCentiKmh: telemetryCenti(t.speed),
       batteryVoltageMv: telemetryMilli(t.batteryVoltage),
       motorCurrentMa: telemetryMilli(t.motorCurrent),

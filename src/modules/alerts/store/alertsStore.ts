@@ -4,12 +4,20 @@ import {
   getAlertRules,
   setAlertRuleEnabled,
   type AlertRule,
+  type AlertRuleInput,
   type AlertSoundType,
   upsertAlertRule,
 } from 'vescape-core'
 import { generateId } from '@/helpers/id'
 
-export type { AlertRule, AlertSoundType } from 'vescape-core'
+export type { AlertRule, AlertRuleInput, AlertSoundType } from 'vescape-core'
+
+/**
+ * Native owns `updatedAt` (the incremental-sync cursor) and stamps it from its own clock. Rules
+ * mirrored into local state before that write lands carry this optimistic value until the next
+ * `load()` replaces them with the persisted rows.
+ */
+const withLocalCursor = (rule: AlertRuleInput): AlertRule => ({ ...rule, updatedAt: Date.now() })
 
 interface AlertsState {
   /**
@@ -36,7 +44,7 @@ interface AlertsActions {
     thresholdMax: number | null,
     soundType: AlertSoundType,
   ): void
-  upsert(rule: AlertRule): Promise<void>
+  upsert(rule: AlertRuleInput): Promise<void>
   setEnabled(id: string, enabled: boolean): Promise<void>
   toggle(id: string): Promise<void>
   remove(id: string): Promise<void>
@@ -67,7 +75,7 @@ export const useAlertsStore = create<AlertsState & AlertsActions>((set, get) => 
   add(controlId, threshold, thresholdMax = null, soundType = 'preset:beep') {
     const boardId = get().boardId
     if (!boardId) return
-    const rule: AlertRule = {
+    const rule = withLocalCursor({
       boardId,
       id: generateId(),
       controlId,
@@ -76,7 +84,7 @@ export const useAlertsStore = create<AlertsState & AlertsActions>((set, get) => 
       enabled: true,
       soundType,
       createdAt: Date.now(),
-    }
+    })
     set((s) => ({ rules: [...s.rules, rule] }))
     void upsertAlertRule(rule)
   },
@@ -92,10 +100,11 @@ export const useAlertsStore = create<AlertsState & AlertsActions>((set, get) => 
   async upsert(rule) {
     // Only reflect the rule locally when it belongs to the bound Board; always persist natively.
     if (rule.boardId === get().boardId) {
+      const local = withLocalCursor(rule)
       set((s) => {
         const exists = s.rules.some((r) => r.id === rule.id)
         return {
-          rules: exists ? s.rules.map((r) => (r.id === rule.id ? rule : r)) : [...s.rules, rule],
+          rules: exists ? s.rules.map((r) => (r.id === rule.id ? local : r)) : [...s.rules, local],
         }
       })
     }

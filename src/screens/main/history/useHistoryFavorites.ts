@@ -172,7 +172,7 @@ export function useHistoryFavorites(
         const updated = await updateFavorite(editingId, {
           startMs,
           endMs,
-          ...(session.deviceId ? { deviceId: session.deviceId } : {}),
+          ...(session.boardId ? { boardId: session.boardId } : {}),
           name: name.trim() || null,
         })
         if (!updated) return
@@ -186,7 +186,7 @@ export function useHistoryFavorites(
       const favorite = await addFavorite({
         startMs,
         endMs,
-        ...(session.deviceId ? { deviceId: session.deviceId } : {}),
+        ...(session.boardId ? { boardId: session.boardId } : {}),
         ...(name.trim() ? { name: name.trim() } : {}),
       })
       if (!favorite) return

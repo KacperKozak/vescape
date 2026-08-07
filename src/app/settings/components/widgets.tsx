@@ -28,6 +28,7 @@ import { FloatingSheet } from '@/components/overlays/AnchoredSheet'
 import { useTriggerRef } from '@/components/overlays/measureTrigger'
 import { IconHero } from '@/components/settings/IconHero'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
+import { BackupStatusLine } from '@/modules/profile/components/BackupStatusLine'
 import { theme } from '@/constants/theme'
 
 /** A horizontal grid row — each `Cell` child takes an equal fraction of the width. */
@@ -443,6 +444,39 @@ function CanvasWidgetShowcase() {
   )
 }
 
+/** A fixed upload time, so the preview renders the same line on every pass. */
+const SHOWCASE_UPLOADED_AT = Date.now() - 5 * 60_000
+
+/** Every backup state native can report, so the copy for each stays browsable without a server. */
+function BackupStatusLineShowcase() {
+  const base = {
+    accountId: 'acc_1',
+    pendingRows: 0,
+    pause: null,
+    lastUploadAtMs: null,
+  } as const
+  return (
+    <ShowcaseCard name="BackupStatusLine">
+      <View style={styles.statusList}>
+        <BackupStatusLine status={{ ...base, accountId: null, activity: 'disabled' }} />
+        <BackupStatusLine status={{ ...base, accountId: null, activity: 'signedOut' }} />
+        <BackupStatusLine
+          status={{ ...base, activity: 'upToDate', lastUploadAtMs: SHOWCASE_UPLOADED_AT }}
+        />
+        <BackupStatusLine
+          status={{ ...base, activity: 'syncing', pendingRows: 1_284 }}
+          backlog={4_000}
+        />
+        <BackupStatusLine status={{ ...base, activity: 'waitingForWifi', pendingRows: 42 }} />
+        <BackupStatusLine status={{ ...base, activity: 'offline', pendingRows: 42 }} />
+        <BackupStatusLine status={{ ...base, activity: 'paused', pause: 'authentication' }} />
+        <BackupStatusLine status={{ ...base, activity: 'paused', pause: 'protocol' }} />
+        <BackupStatusLine status={{ ...base, activity: 'paused', pause: 'rowTooLarge' }} />
+      </View>
+    </ShowcaseCard>
+  )
+}
+
 export default function WidgetsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -459,6 +493,7 @@ export default function WidgetsPage() {
         <SwitchWidgetShowcase />
         <DialWidgetShowcase />
         <CanvasWidgetShowcase />
+        <BackupStatusLineShowcase />
       </ScrollView>
     </SafeAreaView>
   )
@@ -468,6 +503,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.palette.slate.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  statusList: { gap: 8 },
   cell: { flex: 1 },
   sizeLabel: {
     color: theme.palette.slate.textMuted,

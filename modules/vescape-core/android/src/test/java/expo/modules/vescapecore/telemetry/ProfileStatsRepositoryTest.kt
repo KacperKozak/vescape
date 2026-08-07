@@ -112,8 +112,7 @@ class ProfileStatsRepositoryTest {
     lastMoving: Long? = null,
   ) = TelemetryMinuteBucketEntity(
     bucketStartMs = start - (start % TELEMETRY_BUCKET_SIZE_MS),
-    deviceId = "board-1",
-    deviceName = "ADV2",
+    boardId = "board-1",
     sampleCount = 1,
     firstSampleAtMs = start,
     lastSampleAtMs = end,
@@ -136,5 +135,6 @@ class ProfileStatsRepositoryTest {
     maxGpsSpeedCentiMps = 9_999,
     firstMovingAtMs = firstMoving,
     lastMovingAtMs = lastMoving,
+    updatedAt = end,
   )
 }

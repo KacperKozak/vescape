@@ -7,6 +7,7 @@ import expo.modules.vescapecore.diagnostics.DiagnosticReporter
 import expo.modules.vescapecore.service.CoreForegroundService
 
 import expo.modules.vescapecore.connection.BoardTransport
+import expo.modules.vescapecore.sync.SyncCoordinator
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -193,8 +194,9 @@ class AppDataRepository private constructor(private val context: Context) {
     notifyDataChanged(AppDataScope.BOARDS)
   }
 
+  /** Tombstones the Board and hard-deletes its configuration; see [TelemetryDao.deleteBoardWithSettings]. */
   suspend fun deleteBoard(id: String): Unit = withContext(Dispatchers.IO) {
-    dao.deleteBoardWithSettings(id)
+    dao.deleteBoardWithSettings(id, System.currentTimeMillis())
     notifyDataChanged(AppDataScope.BOARDS)
   }
 
@@ -214,7 +216,7 @@ class AppDataRepository private constructor(private val context: Context) {
 
   suspend fun setAlertRuleEnabled(boardId: String, id: String, enabled: Boolean): Unit =
     withContext(Dispatchers.IO) {
-      dao.setAlertRuleEnabled(boardId, id, enabled)
+      dao.setAlertRuleEnabled(boardId, id, enabled, System.currentTimeMillis())
     }
 
   suspend fun deleteAlertRule(boardId: String, id: String): Unit = withContext(Dispatchers.IO) {
@@ -277,6 +279,9 @@ class AppDataRepository private constructor(private val context: Context) {
       companionPresenceCooldownMinutes = req("companionPresenceCooldownMinutes", 60, ::validCompanionCooldownMinutes),
       autoCloseEnabled = req("autoCloseEnabled", false) { it as? Boolean },
       autoCloseDelayMinutes = req("autoCloseDelayMinutes", 15, ::validAutoCloseDelayMinutes),
+      syncEnabled = req("syncEnabled", false) { it as? Boolean },
+      syncWifiOnly = req("syncWifiOnly", false) { it as? Boolean },
+      syncBackupChoiceMade = req("syncBackupChoiceMade", false) { it as? Boolean },
       riderId = opt("riderId") { it as? String },
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
@@ -351,6 +356,8 @@ class AppDataRepository private constructor(private val context: Context) {
       "autoCloseEnabled" -> value as? Boolean ?: return@withContext
       "autoCloseDelayMinutes" ->
         validAutoCloseDelayMinutes(value) ?: return@withContext
+      "syncEnabled", "syncWifiOnly", "syncBackupChoiceMade" ->
+        value as? Boolean ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
       // Legal Policy is native-owned. JS can request refresh through the dedicated intent.
       "legalPolicy" -> return@withContext
@@ -397,6 +404,9 @@ class AppDataRepository private constructor(private val context: Context) {
         "companionPresenceCooldownMinutes" -> d.companionPresenceCooldownMinutes
         "autoCloseEnabled" -> d.autoCloseEnabled
         "autoCloseDelayMinutes" -> d.autoCloseDelayMinutes
+        "syncEnabled" -> d.syncEnabled
+        "syncWifiOnly" -> d.syncWifiOnly
+        "syncBackupChoiceMade" -> d.syncBackupChoiceMade
         "riderId" -> d.riderId
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
@@ -415,6 +425,12 @@ class AppDataRepository private constructor(private val context: Context) {
           updatedAt = System.currentTimeMillis(),
         ),
       )
+    }
+    // The uploader reads the Wi-Fi switch from native truth, not from a JS call, so a write from any
+    // source — the settings row, the one-time choice, a restored backup — reaches it the same way.
+    when (normalizedKey) {
+      "syncEnabled" -> SyncCoordinator.get(context).setEnabled(coerced as? Boolean ?: false)
+      "syncWifiOnly" -> SyncCoordinator.get(context).setWifiOnly(coerced as? Boolean ?: false)
     }
     notifyDataChanged(AppDataScope.SETTINGS)
   }
@@ -632,6 +648,7 @@ class AppDataRepository private constructor(private val context: Context) {
     val settings = getTypedSettings()
     settings.selectedBoardId
       ?.let { dao.getBoard(it) }
+      ?.takeIf { it.deletedAt == null }
       ?.let { it.toMap(dao.getBoardSettings(it.id)) }
       ?: dao.getBoards().firstOrNull()?.let { it.toMap(dao.getBoardSettings(it.id)) }
   }
@@ -696,6 +713,8 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
     "alertPresetsOnboarded" to (values["alertPresetsOnboarded"] ?: false),
     "legalMode" to (values["legalMode"] ?: mapOf("enabled" to false)),
     "link" to link,
+    "updatedAt" to updatedAt,
+    "deletedAt" to deletedAt,
   )
 }
 
@@ -731,6 +750,9 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "companionPresenceCooldownMinutes" to companionPresenceCooldownMinutes,
   "autoCloseEnabled" to autoCloseEnabled,
   "autoCloseDelayMinutes" to autoCloseDelayMinutes,
+  "syncEnabled" to syncEnabled,
+  "syncWifiOnly" to syncWifiOnly,
+  "syncBackupChoiceMade" to syncBackupChoiceMade,
   "riderId" to riderId,
   "riderName" to riderName,
   "riderColor" to riderColor,
@@ -770,6 +792,7 @@ fun AlertRuleEntity.toMap(): Map<String, Any?> = mapOf(
   "soundType" to soundType,
   "createdAt" to createdAt,
   "source" to source,
+  "updatedAt" to updatedAt,
 )
 
 fun TuneProfileEntity.toMap(): Map<String, Any?> = mapOf(
@@ -908,11 +931,17 @@ private fun Map<String, Any?>.normalizedBoardLink(): Map<String, Any?>? {
   )
 }
 
-internal fun Map<String, Any?>.toBoardEntity(): BoardEntity = BoardEntity(
+/**
+ * Native stamps [BoardEntity.updatedAt] itself rather than trusting the bridge value: it is a sync
+ * cursor, so it must come from the device clock that already writes `created_at` and must move on
+ * every upsert, including partial edits that leave `createdAt` untouched.
+ */
+internal fun Map<String, Any?>.toBoardEntity(now: Long = System.currentTimeMillis()): BoardEntity = BoardEntity(
   id = getString("id"),
   name = getString("name"),
   bleId = normalizedBoardLink()?.get("bleId") as? String,
   createdAt = getLong("createdAt"),
+  updatedAt = now,
 )
 
 internal fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<List<BoardSettingEntity>, List<String>> {
@@ -1059,7 +1088,10 @@ private fun parseLegacyMapString(value: String): Map<String, Any?>? {
   }.toMap()
 }
 
-private fun Map<String, Any?>.toAlertRuleEntity(): AlertRuleEntity = AlertRuleEntity(
+/** Native stamps [AlertRuleEntity.updatedAt]; see [toBoardEntity] for why the bridge value is ignored. */
+internal fun Map<String, Any?>.toAlertRuleEntity(
+  now: Long = System.currentTimeMillis(),
+): AlertRuleEntity = AlertRuleEntity(
   boardId = getString("boardId"),
   id = getString("id"),
   controlId = getString("controlId"),
@@ -1069,6 +1101,7 @@ private fun Map<String, Any?>.toAlertRuleEntity(): AlertRuleEntity = AlertRuleEn
   soundType = get("soundType") as? String ?: "default",
   createdAt = getLong("createdAt"),
   source = get("source") as? String,
+  updatedAt = now,
 )
 
 private fun Map<String, Any?>.getString(key: String): String =
