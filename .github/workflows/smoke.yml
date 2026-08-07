@@ -23,7 +23,7 @@ jobs:
     # 8 vCPU / 32 GB is sized for the release Gradle build (the long pole) sharing the box with an
     # emulator that wants ~4 GB to itself; the 160 GB disk also fits the SDK + NDK + Gradle caches.
     runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 90
+    timeout-minutes: 60
 
     # `fixtureBuildEnv` spreads the ambient environment into the build, so everything the app needs
     # baked in is set once here and reaches both `expo prebuild` and Gradle. No keystore: without
@@ -39,9 +39,22 @@ jobs:
       # build is thrown away with the emulator, so it has no release to publish — the fix is to skip
       # the upload rather than to hand CI a Sentry token for an artifact nobody will ever symbolicate.
       SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+      # The emulator is x86_64, so the other three ABIs are compiled and then thrown away. Each one
+      # is a full CMake build of the app plus every native module, and together they dominate the
+      # run. `android/` is prebuild-generated, so the override has to arrive as a project property
+      # from the environment rather than as an edit to `android/gradle.properties`.
+      ORG_GRADLE_PROJECT_reactNativeArchitectures: x86_64
+      GRADLE_OPTS: -Dorg.gradle.caching=true
 
     steps:
       - uses: actions/checkout@v4
+
+      # Expo reads `app.config.ts` through `require(esm)` + `module.stripTypeScriptTypes`, neither of
+      # which exists on the Node 20 the runner image ships. Pinned everywhere else in CI for the
+      # same reason.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -51,20 +64,28 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
+
+      - uses: useblacksmith/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-smoke-${{ runner.os }}-${{ hashFiles('bun.lock', 'app.config.ts') }}
+          restore-keys: |
+            gradle-smoke-${{ runner.os }}-
 
       - uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK components
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Install Maestro
-        run: |
-          curl -Ls https://get.maestro.mobile.dev | bash
-          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      # The SDK download, the JS install and the Maestro install share nothing, so they overlap.
+      - parallel:
+          - name: Install Android SDK components
+            run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+          - name: Install dependencies
+            run: bun install
+          - name: Install Maestro
+            run: |
+              curl -Ls https://get.maestro.mobile.dev | bash
+              echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       # The emulator is unusably slow without nested virtualisation, and the runner does not grant
       # access to /dev/kvm by default. Kept while the Blacksmith move is unproven — drop it once a
