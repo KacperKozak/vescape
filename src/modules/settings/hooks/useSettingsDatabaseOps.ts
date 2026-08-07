@@ -114,7 +114,7 @@ export function useSettingsDatabaseOps() {
       setRestoreState('error')
       setRestoreResult(e?.message ?? 'Restore failed')
     }
-  }, [refreshDatabaseSize])
+  }, [])
 
   const rebuildHint =
     rebuildState === 'error' && rebuildResult
