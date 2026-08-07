@@ -269,9 +269,11 @@ const styles = StyleSheet.create({
   },
   hero: {
     alignItems: 'center',
-    gap: 12,
-    paddingTop: 4,
-    paddingBottom: 2,
+    // The drawer opens from the top edge, so the wordmark needs room to read as a header
+    // rather than as the first row of the list.
+    gap: 22,
+    paddingTop: 24,
+    paddingBottom: 10,
   },
   dim: {
     opacity: 0.5,
@@ -280,7 +282,8 @@ const styles = StyleSheet.create({
     ...widgetSurface,
     flexDirection: 'row',
     alignItems: 'stretch',
-    paddingVertical: 12,
+    paddingVertical: 14,
+    marginBottom: 10,
   },
   stripCell: {
     flex: 1,
