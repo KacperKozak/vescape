@@ -55,7 +55,8 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   // The label outlives `visible` on purpose: `FadeCardModal` keeps rendering its children through
   // the exit animation, so clearing the name on dismiss would blank the card as it fades.
   const [unbuiltControl, setUnbuiltControl] = useState({ label: '', visible: false })
-  const [legalModeError, setLegalModeError] = useState<string | null>(null)
+  // Same reason as `unbuiltControl`: the message has to survive the card's exit animation.
+  const [legalModeError, setLegalModeError] = useState({ message: '', visible: false })
   const activeBoardId = useBoardStore((state) => state.activeBoardId)
   const tuneCompatibility = useBoardStore(
     (state) =>
@@ -120,7 +121,10 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   const toggleLegalMode = (enabled: boolean) => {
     if (!activeBoardId) return
     void setLegalModeEnabled(activeBoardId, enabled).catch((error: unknown) => {
-      setLegalModeError(errorMessage(error, 'Could not change Legal Mode.'))
+      setLegalModeError({
+        message: errorMessage(error, 'Could not change Legal Mode.'),
+        visible: true,
+      })
     })
   }
 
@@ -263,12 +267,12 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
         onDismiss={() => setUnbuiltControl((current) => ({ ...current, visible: false }))}
       />
       <InfoModal
-        visible={legalModeError != null}
+        visible={legalModeError.visible}
         title="Legal Mode unavailable"
-        message={legalModeError ?? ''}
+        message={legalModeError.message}
         variant="danger"
         dismissLabel="Close"
-        onDismiss={() => setLegalModeError(null)}
+        onDismiss={() => setLegalModeError((current) => ({ ...current, visible: false }))}
       />
     </View>
   )
