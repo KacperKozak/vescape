@@ -1627,13 +1627,24 @@ const native = requireNativeModule<VescapeCoreNativeModule>('VescapeCore')
 const emitter = native
 const E2E_ENABLED = process.env.EXPO_PUBLIC_E2E === '1'
 
+/**
+ * BLE discovery is faked in the smoke run too, and only discovery.
+ *
+ * An emulator has no radio, so no harness can ever scan a real board — that fake stands in for
+ * absent hardware. Every other `E2E_ENABLED` branch below stands in for absent *data*, which the
+ * smoke run gets from a restored database and a replayed recording instead (`@/config/env`
+ * `smokeMode`). Folding the two under one flag is what would make a smoke run assert against
+ * `e2eFake` rather than the native stack it exists to test.
+ */
+const FAKE_SCAN = E2E_ENABLED || process.env.EXPO_PUBLIC_SMOKE === '1'
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
 
 /** Start BLE scan — emits onDevice events for every advertisement received. */
 export function scan(): void {
-  if (E2E_ENABLED) {
+  if (FAKE_SCAN) {
     e2eFake.scan()
     return
   }
@@ -1643,7 +1654,7 @@ export function scan(): void {
 
 /** Stop ongoing BLE scan. */
 export function stopScan(): void {
-  if (E2E_ENABLED) {
+  if (FAKE_SCAN) {
     e2eFake.stopScan()
     return
   }
@@ -2449,8 +2460,13 @@ export function seedE2EData(flow: string): void {
 // Event listeners
 // ---------------------------------------------------------------------------
 
+/**
+ * Discovery is a pair: `scan()` emits into `e2eFake`'s listener set, so a build that fakes the scan
+ * has to subscribe there too. Splitting only the emit side leaves JS listening to the native
+ * emitter for advertisements nothing is sending — the scan screen simply stays empty.
+ */
 export function addDeviceListener(cb: (event: DeviceFoundEvent) => void): EventSubscription {
-  if (E2E_ENABLED) {
+  if (FAKE_SCAN) {
     return e2eFake.addDeviceListener(cb)
   }
 
