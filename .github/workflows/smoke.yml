@@ -1,6 +1,6 @@
 # Smoke run on a hosted emulator.
 #
-# Dispatch-only for now. The run takes ~40 minutes and drives a live UI, so it is not a PR gate
+# Dispatch-only for now. The run takes ~10 minutes and drives a live UI, so it is not a PR gate
 # until it has proven itself stable by hand a few times.
 name: Smoke
 
@@ -65,7 +65,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: useblacksmith/cache@v5
+      # Split restore/save rather than the combined action: the whole point of this workflow is to
+      # fail on a bad build, and the combined action skips its save step when the job fails — which
+      # would leave every run cold for exactly as long as the flows are red.
+      - uses: useblacksmith/cache/restore@v5
+        id: gradle-cache
         with:
           path: |
             ~/.gradle/caches
@@ -114,6 +118,15 @@ jobs:
             -noaudio -camera-back none
           disable-animations: false
           script: bun run smoke --device emulator-5554 ${{ inputs.flow && format('--flow {0}', inputs.flow) || '' }}
+
+      - name: Save Gradle cache
+        if: always() && steps.gradle-cache.outputs.cache-hit != 'true'
+        uses: useblacksmith/cache/save@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ steps.gradle-cache.outputs.cache-primary-key }}
 
       # Maestro writes a screenshot and a view hierarchy dump per failed step, which is the only way
       # to tell a real regression from a slow-runner race without reproducing it locally.
