@@ -243,12 +243,27 @@ export async function createAndroidDriver(
       await adb('shell', 'pm', 'clear', applicationId)
 
       if (existsSync(FIXTURE_ZIP)) {
-        await adb('push', FIXTURE_ZIP, `${DEVICE_FIXTURE_DIR}/${basename(FIXTURE_ZIP)}`)
-        // `pm clear` deleted the external files dir, so the push is what recreates it — owned by
-        // `shell:ext_data_rw`, mode `rwxrws---`. The app is neither owner nor in that group and
-        // cannot traverse its own directory, so `restoreDatabase` fails with EACCES and the run
-        // silently captures an empty app. Reopening both levels is what makes the push readable.
+        const remote = `${DEVICE_FIXTURE_DIR}/${basename(FIXTURE_ZIP)}`
+        // `pm clear` deleted the external files dir, and `adb push` cannot always recreate it: its
+        // `secure_mkdirs` is refused on the FUSE-backed `Android/data` of an emulator image, so the
+        // push fails outright with ENOENT. `adb shell mkdir` goes through the sdcard mount as
+        // `shell` and is allowed, which is the same explicit `mkdir` the iOS driver does after it
+        // wipes the container.
+        await adb('shell', 'mkdir', '-p', DEVICE_FIXTURE_DIR)
+        // The recreated dir is owned by `shell:ext_data_rw`, mode `rwxrws---`. The app is neither
+        // owner nor in that group and cannot traverse its own directory, so `restoreDatabase` fails
+        // with EACCES and the run silently captures an empty app. Reopening both levels is what
+        // makes the push readable.
         await adb('shell', 'chmod', '777', DEVICE_FIXTURE_DIR, dirname(DEVICE_FIXTURE_DIR))
+        // `capture` discards exit codes, so a rejected push used to reach the flows as an app with
+        // an empty database — the run then failed several steps later on a missing board, pointing
+        // at the app rather than at the staging that never happened. Assert the file is there.
+        await runOrDie(['adb', '-s', device.serial, 'push', FIXTURE_ZIP, remote])
+        const staged = await adb('shell', 'ls', remote)
+        if (!staged.includes(remote)) {
+          console.error(`Fixture zip is not on ${device.name} at ${remote} after the push.`)
+          process.exit(1)
+        }
       } else {
         warnMissingFixture()
       }
