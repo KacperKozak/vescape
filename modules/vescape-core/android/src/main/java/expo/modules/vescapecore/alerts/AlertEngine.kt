@@ -47,7 +47,7 @@ val ALERT_BEEP_COUNT_RANGE = 1..5
 const val ALERT_BEEP_COUNT_DEFAULT = 3
 
 /** Gap between beeps of one announcement — tight enough that a burst reads as a single signal. */
-internal const val ALERT_BEEP_SPACING_MS = 200L
+internal const val ALERT_BEEP_SPACING_MS = 350L
 
 /**
  * Clamp a repeat cadence coming from JS. Anything non-positive means one-shot; everything else is
