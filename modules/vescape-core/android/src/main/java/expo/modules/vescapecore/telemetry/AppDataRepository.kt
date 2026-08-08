@@ -13,6 +13,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import expo.modules.vescapecore.alerts.normalizedAlertBeepCount
+import expo.modules.vescapecore.alerts.normalizedAlertRepeatSeconds
 
 // @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `AppDataScope`
 // @parity /modules/vescape-core/src/index.ts `AppDataChangedEvent`
@@ -784,6 +786,8 @@ fun AlertRuleEntity.toMap(): Map<String, Any?> = mapOf(
   "enabled" to enabled,
   "soundType" to soundType,
   "createdAt" to createdAt,
+  "repeatEverySeconds" to repeatEverySeconds,
+  "beepCount" to beepCount,
   "source" to source,
 )
 
@@ -1083,6 +1087,8 @@ private fun Map<String, Any?>.toAlertRuleEntity(): AlertRuleEntity = AlertRuleEn
   enabled = getBoolean("enabled"),
   soundType = get("soundType") as? String ?: "default",
   createdAt = getLong("createdAt"),
+  repeatEverySeconds = normalizedAlertRepeatSeconds(getDoubleOrNull("repeatEverySeconds")),
+  beepCount = normalizedAlertBeepCount((get("beepCount") as? Number)?.toInt()),
   source = get("source") as? String,
 )
 
