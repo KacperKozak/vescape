@@ -14,7 +14,7 @@ import {
   AndroidLogoIcon,
   AppleLogoIcon,
   MapPinIcon,
-  FadersIcon,
+  ClockCounterClockwiseIcon,
   ChartLineUpIcon,
   GaugeIcon,
   WatchIcon,
@@ -151,11 +151,11 @@ export default function SettingsScreen() {
             onPress={() => router.push(routes.settingsPrivacyZones)}
           />
           <SettingsRow
-            icon={FadersIcon}
+            icon={ClockCounterClockwiseIcon}
             iconColor={theme.settingsIcon.filters}
-            label="Filters"
-            hint="Ride data filtering and free-spin detection"
-            onPress={() => router.push(routes.settingsFilters)}
+            label="History"
+            hint="Ride splitting and ride data filtering"
+            onPress={() => router.push(routes.settingsHistory)}
           />
           <SettingsRow
             icon={ChartLineUpIcon}

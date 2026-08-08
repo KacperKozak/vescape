@@ -79,6 +79,12 @@ internal fun validDismissedCommunityMessageIds(value: Any?): List<String>? {
   return list.filterIsInstance<String>().filter { it.isNotEmpty() }.distinct()
 }
 
+/** Ride split gap in minutes; at least 1 so every ride can still end, capped at 24h. */
+internal fun validRideSplitGapMinutes(value: Any?): Int? =
+  (value as? Number)
+    ?.toInt()
+    ?.coerceIn(1, 1440)
+
 /** Auto close delay in minutes; at least 1 so a fired timer always had a real wait. */
 internal fun validAutoCloseDelayMinutes(value: Any?): Int? =
   (value as? Number)
@@ -277,6 +283,11 @@ class AppDataRepository private constructor(private val context: Context) {
       companionPresenceCooldownMinutes = req("companionPresenceCooldownMinutes", 60, ::validCompanionCooldownMinutes),
       autoCloseEnabled = req("autoCloseEnabled", false) { it as? Boolean },
       autoCloseDelayMinutes = req("autoCloseDelayMinutes", 15, ::validAutoCloseDelayMinutes),
+      rideSplitGapMinutes = req(
+        "rideSplitGapMinutes",
+        DEFAULT_RIDE_SPLIT_GAP_MINUTES,
+        ::validRideSplitGapMinutes,
+      ),
       riderId = opt("riderId") { it as? String },
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
@@ -351,6 +362,8 @@ class AppDataRepository private constructor(private val context: Context) {
       "autoCloseEnabled" -> value as? Boolean ?: return@withContext
       "autoCloseDelayMinutes" ->
         validAutoCloseDelayMinutes(value) ?: return@withContext
+      "rideSplitGapMinutes" ->
+        validRideSplitGapMinutes(value) ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
       // Legal Policy is native-owned. JS can request refresh through the dedicated intent.
       "legalPolicy" -> return@withContext
@@ -397,6 +410,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "companionPresenceCooldownMinutes" -> d.companionPresenceCooldownMinutes
         "autoCloseEnabled" -> d.autoCloseEnabled
         "autoCloseDelayMinutes" -> d.autoCloseDelayMinutes
+        "rideSplitGapMinutes" -> d.rideSplitGapMinutes
         "riderId" -> d.riderId
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
@@ -731,6 +745,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "companionPresenceCooldownMinutes" to companionPresenceCooldownMinutes,
   "autoCloseEnabled" to autoCloseEnabled,
   "autoCloseDelayMinutes" to autoCloseDelayMinutes,
+  "rideSplitGapMinutes" to rideSplitGapMinutes,
   "riderId" to riderId,
   "riderName" to riderName,
   "riderColor" to riderColor,

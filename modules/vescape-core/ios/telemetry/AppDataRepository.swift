@@ -474,6 +474,9 @@ final class AppDataRepository {
     } else if key == "boardMoveStrengthPercent" {
       guard let percent = Self.boardMoveStrengthPercent(rawValue) else { return }
       value = percent
+    } else if key == "rideSplitGapMinutes" {
+      guard let minutes = Self.rideSplitGapMinutes(rawValue) else { return }
+      value = minutes
     } else if key == "dismissedCommunityMessageIds" {
       guard let ids = Self.dismissedCommunityMessageIds(rawValue) else { return }
       value = ids
@@ -535,6 +538,7 @@ final class AppDataRepository {
     "directionPointLongitude": NSNull(),
     "legalPolicy": NSNull(),
     "movingSpeedThresholdKmh": 3,
+    "rideSplitGapMinutes": DEFAULT_RIDE_SPLIT_GAP_MINUTES,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
     "freeSpinStationaryBoardCapKmh": DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
     "satelliteOverlayEnabled": true,
@@ -568,6 +572,8 @@ final class AppDataRepository {
       satelliteImagerySaturation(settings["satelliteImagerySaturation"]) ?? defaultSettings["satelliteImagerySaturation"]
     normalized["boardMoveStrengthPercent"] =
       boardMoveStrengthPercent(settings["boardMoveStrengthPercent"]) ?? defaultSettings["boardMoveStrengthPercent"]
+    normalized["rideSplitGapMinutes"] =
+      rideSplitGapMinutes(settings["rideSplitGapMinutes"]) ?? defaultSettings["rideSplitGapMinutes"]
     normalized["legalPolicy"] = normalizeLegalPolicy(settings["legalPolicy"]) ?? NSNull()
     normalized["dismissedCommunityMessageIds"] =
       dismissedCommunityMessageIds(settings["dismissedCommunityMessageIds"]) ?? [String]()
@@ -581,6 +587,13 @@ final class AppDataRepository {
   static func boardMoveStrengthPercent(_ value: Any?) -> Int? {
     guard let number = value as? NSNumber, !(value is Bool) else { return nil }
     return min(100, max(10, number.intValue))
+  }
+
+  /// Ride split gap in minutes; at least 1 so every ride can still end, capped at 24h.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `validRideSplitGapMinutes`
+  static func rideSplitGapMinutes(_ value: Any?) -> Int? {
+    guard let number = value as? NSNumber, !(value is Bool) else { return nil }
+    return min(1440, max(1, number.intValue))
   }
 
   /// Acknowledged Community Message IDs: a de-duplicated list of non-empty ID strings, or `nil` when

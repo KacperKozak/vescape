@@ -13,6 +13,7 @@ const BASE: AppSettings = {
   directionPointLatitude: null,
   directionPointLongitude: null,
   movingSpeedThresholdKmh: 3,
+  rideSplitGapMinutes: 30,
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
   mapStyleKey: 'onedark',

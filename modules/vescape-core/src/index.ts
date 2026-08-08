@@ -960,6 +960,11 @@ export interface AppSettings {
   movingSpeedThresholdKmh: number
   freeSpinMaxSpeedDeltaKmh: number
   freeSpinStationaryBoardCapKmh: number
+  /**
+   * Minutes of no recorded samples that end a ride: a longer stop starts a new one in the history
+   * list and in profile stats. Read-time grouping, so changing it re-groups existing rides too.
+   */
+  rideSplitGapMinutes: number
   mapStyleKey: 'onedark' | 'outdoors' | 'satellite' | 'mapy'
   /** Use the custom satellite overlay style instead of the stock satellite style. */
   satelliteOverlayEnabled: boolean
